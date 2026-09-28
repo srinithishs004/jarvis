@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime
 from typing import Any
 
 import psycopg
@@ -140,3 +141,58 @@ class TaskRepository:
                     ),
                 )
             conn.commit()
+
+    def list_active(self) -> list[Task]:
+        with psycopg.connect(self.database_url, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        id,
+                        status,
+                        completed_at,
+                        created_at,
+                        metadata
+                    FROM tasks
+                    WHERE status IN ('queued', 'running')
+                    ORDER BY created_at ASC
+                    """
+                )
+                rows = cur.fetchall()
+
+        tasks: list[Task] = []
+
+        for (
+            task_id_db,
+            status,
+            completed_at,
+            created_at,
+            metadata,
+        ) in rows:
+            metadata = metadata or {}
+
+            started_at = metadata.get("started_at")
+            if started_at:
+                started_at = datetime.fromisoformat(started_at)
+
+            tasks.append(
+                Task(
+                    task_id=str(task_id_db),
+                    tool_name=metadata.get("tool_name", ""),
+                    arguments=metadata.get("arguments", {}),
+                    status=status,
+                    confirmation_id=metadata.get("confirmation_id"),
+                    result=metadata.get("result"),
+                    error=metadata.get("error"),
+                    error_type=metadata.get("error_type"),
+                    created_at=created_at,
+                    started_at=started_at,
+                    completed_at=completed_at,
+                    cancel_requested=metadata.get(
+                        "cancel_requested",
+                        False,
+                    ),
+                )
+            )
+
+        return tasks

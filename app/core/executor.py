@@ -55,6 +55,7 @@ class ProcessExecutor:
         arguments: dict[str, Any],
         timeout_seconds: float,
         cancel_check: Callable[[], bool] | None = None,
+        heartbeat: Callable[[], bool] | None = None,
         poll_interval: float = 0.1,
     ) -> tuple[str, Any]:
         parent_conn, child_conn = self.context.Pipe(duplex=False)
@@ -74,6 +75,9 @@ class ProcessExecutor:
                 if cancel_check and cancel_check():
                     self._terminate(process)
                     return "cancelled", None
+
+                if heartbeat:
+                    heartbeat()
 
                 process.join(timeout=poll_interval)
                 elapsed += poll_interval

@@ -1,6 +1,8 @@
 import os
 
 from dotenv import load_dotenv
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 import psycopg
 from upstash_redis import Redis
@@ -14,9 +16,20 @@ from app.models.task import TaskStatus
 
 load_dotenv("/opt/jarvis/.env")
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    reconciliation = tool_router.task_manager.reconcile_active_tasks()
+    print(
+        "Task reconciliation:",
+        reconciliation,
+    )
+    yield
+
+
 app = FastAPI(
     title="JARVIS API",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 tool_registry = ToolRegistry()
@@ -88,6 +101,18 @@ def list_tools():
 from typing import Any
 
 from fastapi import Body
+
+@app.post("/tools/{tool_name:path}/execute-async")
+def execute_tool_async(
+    tool_name: str,
+    payload: dict[str, Any] = Body(default_factory=dict),
+):
+    return tool_router.execute_background(
+        tool_name,
+        arguments=payload.get("arguments", {}),
+        confirmation_id=payload.get("confirmation_id"),
+    )
+
 
 @app.post("/tools/{tool_name:path}/execute")
 def execute_tool(

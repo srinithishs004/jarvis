@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from app.db.tasks import TaskRepository
 from app.models.task import Task, TaskStatus
@@ -11,8 +12,10 @@ class TaskManager:
         repository: TaskRepository | None = None,
         state_store: TaskStateStore | None = None,
     ) -> None:
+        self.worker_id = str(uuid4())
         self._tasks: dict[str, Task] = {}
         self._last_cancel_check: dict[str, datetime] = {}
+        self._last_heartbeat: dict[str, datetime] = {}
         self.repository = repository or TaskRepository()
         self.state_store = state_store or TaskStateStore()
 
@@ -61,7 +64,15 @@ class TaskManager:
         task.started_at = datetime.now(timezone.utc)
 
         self.repository.update(task)
-        self.state_store.save(task)
+        self.state_store.save(
+            task,
+            worker_id=self.worker_id,
+        )
+        self.state_store.acquire_lease(
+            task.task_id,
+            self.worker_id,
+        )
+        self._last_heartbeat[task.task_id] = datetime.now(timezone.utc)
 
         return task
 
@@ -79,6 +90,8 @@ class TaskManager:
 
         self.repository.update(task)
         self.state_store.save(task)
+        self.state_store.release_lease(task.task_id)
+        self._last_heartbeat.pop(task.task_id, None)
 
         return task
 
@@ -102,6 +115,8 @@ class TaskManager:
 
         self.repository.update(task)
         self.state_store.save(task)
+        self.state_store.release_lease(task.task_id)
+        self._last_heartbeat.pop(task.task_id, None)
 
         return task
 
@@ -141,8 +156,37 @@ class TaskManager:
 
         self.repository.update(task)
         self.state_store.save(task)
+        self.state_store.release_lease(task.task_id)
+        self._last_heartbeat.pop(task.task_id, None)
 
         return task
+
+    def heartbeat(
+        self,
+        task_id: str,
+        heartbeat_interval: float = 5.0,
+    ) -> bool:
+        task = self.get(task_id)
+
+        if task.status != TaskStatus.RUNNING:
+            return False
+
+        now = datetime.now(timezone.utc)
+        last_heartbeat = self._last_heartbeat.get(task_id)
+
+        if (
+            last_heartbeat is not None
+            and (now - last_heartbeat).total_seconds() < heartbeat_interval
+        ):
+            return True
+
+        self.state_store.renew_lease(
+            task_id,
+            self.worker_id,
+        )
+
+        self._last_heartbeat[task_id] = now
+        return True
 
     def is_cancel_requested(
         self,
@@ -175,6 +219,79 @@ class TaskManager:
             return True
 
         return False
+
+    def reconcile_active_tasks(self) -> dict[str, int]:
+        """Reconcile persisted queued/running tasks after process startup."""
+        active_tasks = self.repository.list_active()
+
+        summary = {
+            "checked": 0,
+            "queued": 0,
+            "running_active": 0,
+            "running_orphaned": 0,
+        }
+
+        now = datetime.now(timezone.utc)
+
+        for task in active_tasks:
+            summary["checked"] += 1
+            self._tasks[task.task_id] = task
+
+            if task.status == TaskStatus.QUEUED:
+                summary["queued"] += 1
+                continue
+
+            if task.status != TaskStatus.RUNNING:
+                continue
+
+            lease = self.state_store.get_lease(task.task_id)
+
+            if lease is None:
+                task.status = TaskStatus.FAILED
+                task.error = (
+                    "Task lost its worker lease during process recovery"
+                )
+                task.error_type = "worker_lost"
+                task.completed_at = now
+
+                self.repository.update(task)
+                self.state_store.save(task)
+                self.state_store.release_lease(task.task_id)
+
+                summary["running_orphaned"] += 1
+                continue
+
+            expires_at_raw = lease.get("lease_expires_at")
+
+            if expires_at_raw:
+                try:
+                    expires_at = datetime.fromisoformat(expires_at_raw)
+
+                    if expires_at <= now:
+                        task.status = TaskStatus.FAILED
+                        task.error = (
+                            "Task worker lease expired during "
+                            "process recovery"
+                        )
+                        task.error_type = "worker_lost"
+                        task.completed_at = now
+
+                        self.repository.update(task)
+                        self.state_store.save(task)
+                        self.state_store.release_lease(task.task_id)
+
+                        summary["running_orphaned"] += 1
+                        continue
+
+                except (TypeError, ValueError):
+                    # Invalid lease metadata is not safe enough to
+                    # claim ownership from another worker.
+                    summary["running_active"] += 1
+                    continue
+
+            summary["running_active"] += 1
+
+        return summary
 
     def list(self) -> list[Task]:
         return list(self._tasks.values())

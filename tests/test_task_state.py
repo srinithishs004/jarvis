@@ -63,3 +63,65 @@ def test_task_state_stores_worker_id():
     state = store.get("worker-task")
 
     assert state["worker_id"] == "worker-123"
+
+
+def test_task_lease_acquire_and_get():
+    fake = FakeRedis()
+    store = TaskStateStore(redis=fake)
+
+    store.acquire_lease("lease-task", "worker-123", ttl_seconds=15)
+
+    lease = store.get_lease("lease-task")
+
+    assert lease["task_id"] == "lease-task"
+    assert lease["worker_id"] == "worker-123"
+    assert fake.ttls["jarvis:task-lease:lease-task"] == 15
+
+
+def test_task_lease_renew_rejects_other_worker():
+    fake = FakeRedis()
+    store = TaskStateStore(redis=fake)
+
+    store.acquire_lease("lease-task", "worker-123")
+
+    try:
+        store.renew_lease("lease-task", "worker-456")
+    except RuntimeError as exc:
+        assert "another worker" in str(exc)
+    else:
+        raise AssertionError("Expected lease ownership error")
+
+
+def test_task_lease_release():
+    fake = FakeRedis()
+    store = TaskStateStore(redis=fake)
+
+    store.acquire_lease("lease-task", "worker-123")
+    store.release_lease("lease-task")
+
+    assert store.get_lease("lease-task") is None
+
+
+def test_task_lease_contains_expiry():
+    fake = FakeRedis()
+    store = TaskStateStore(redis=fake)
+
+    store.acquire_lease("expiry-task", "worker-123", ttl_seconds=15)
+
+    lease = store.get_lease("expiry-task")
+
+    assert lease["worker_id"] == "worker-123"
+    assert lease["lease_expires_at"]
+
+
+def test_task_lease_renew_updates_expiry():
+    fake = FakeRedis()
+    store = TaskStateStore(redis=fake)
+
+    store.acquire_lease("renew-task", "worker-123", ttl_seconds=15)
+    first = store.get_lease("renew-task")["lease_expires_at"]
+
+    store.renew_lease("renew-task", "worker-123", ttl_seconds=30)
+    second = store.get_lease("renew-task")["lease_expires_at"]
+
+    assert first != second
