@@ -1,0 +1,12 @@
+services:
+  jarvis-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: jarvis-api:0.1.0
+    container_name: jarvis-api
+    restart: unless-stopped
+    env_file:
+      - /opt/jarvis/.env
+    ports:
+      - "127.0.0.1:8000:8000"
