@@ -88,9 +88,9 @@ class TaskManager:
         task.result = result
         task.completed_at = datetime.now(timezone.utc)
 
+        self.state_store.release_lease(task.task_id)
         self.repository.update(task)
         self.state_store.save(task)
-        self.state_store.release_lease(task.task_id)
         self._last_heartbeat.pop(task.task_id, None)
 
         return task
@@ -113,9 +113,9 @@ class TaskManager:
         task.error_type = error_type
         task.completed_at = datetime.now(timezone.utc)
 
+        self.state_store.release_lease(task.task_id)
         self.repository.update(task)
         self.state_store.save(task)
-        self.state_store.release_lease(task.task_id)
         self._last_heartbeat.pop(task.task_id, None)
 
         return task
@@ -154,9 +154,9 @@ class TaskManager:
         task.status = TaskStatus.CANCELLED
         task.completed_at = datetime.now(timezone.utc)
 
+        self.state_store.release_lease(task.task_id)
         self.repository.update(task)
         self.state_store.save(task)
-        self.state_store.release_lease(task.task_id)
         self._last_heartbeat.pop(task.task_id, None)
 
         return task
