@@ -83,7 +83,10 @@ class ProcessExecutor:
                     return "timeout", None
 
             if parent_conn.poll():
-                payload = parent_conn.recv()
+                try:
+                    payload = parent_conn.recv()
+                except EOFError:
+                    return "execution_error", "Worker exited without a result"
 
                 if payload["ok"]:
                     return "succeeded", payload["result"]
