@@ -59,6 +59,51 @@ class TaskRepository:
                 )
             conn.commit()
 
+
+    def get(self, task_id: str) -> Task | None:
+        with psycopg.connect(self.database_url, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        id,
+                        status,
+                        completed_at,
+                        created_at,
+                        metadata
+                    FROM tasks
+                    WHERE id = %s
+                    """,
+                    (task_id,),
+                )
+                row = cur.fetchone()
+
+        if row is None:
+            return None
+
+        task_id_db, status, completed_at, created_at, metadata = row
+        metadata = metadata or {}
+
+        started_at = metadata.get("started_at")
+        if started_at:
+            from datetime import datetime
+            started_at = datetime.fromisoformat(started_at)
+
+        return Task(
+            task_id=str(task_id_db),
+            tool_name=metadata.get("tool_name", ""),
+            arguments=metadata.get("arguments", {}),
+            status=status,
+            confirmation_id=metadata.get("confirmation_id"),
+            result=metadata.get("result"),
+            error=metadata.get("error"),
+            error_type=metadata.get("error_type"),
+            created_at=created_at,
+            started_at=started_at,
+            completed_at=completed_at,
+            cancel_requested=metadata.get("cancel_requested", False),
+        )
+
     def update(self, task: Task) -> None:
         metadata = {
             "tool_name": task.tool_name,

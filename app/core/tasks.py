@@ -36,10 +36,18 @@ class TaskManager:
         return task
 
     def get(self, task_id: str) -> Task:
-        try:
-            return self._tasks[task_id]
-        except KeyError:
-            raise KeyError(f"Task not found: {task_id}") from None
+        task = self._tasks.get(task_id)
+
+        if task is not None:
+            return task
+
+        task = self.repository.get(task_id)
+
+        if task is None:
+            raise KeyError(f"Task not found: {task_id}")
+
+        self._tasks[task_id] = task
+        return task
 
     def mark_running(self, task_id: str) -> Task:
         task = self.get(task_id)
