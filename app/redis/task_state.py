@@ -13,13 +13,19 @@ class TaskStateStore:
     def _key(self, task_id: str) -> str:
         return f"{self.PREFIX}{task_id}"
 
-    def save(self, task: Task, ttl_seconds: int = 86400) -> None:
+    def save(
+        self,
+        task: Task,
+        ttl_seconds: int = 86400,
+        worker_id: str | None = None,
+    ) -> None:
         self.redis.set(
             self._key(task.task_id),
             {
                 "task_id": task.task_id,
                 "status": task.status.value,
                 "cancel_requested": task.cancel_requested,
+                "worker_id": worker_id,
             },
             ttl_seconds=ttl_seconds,
         )
