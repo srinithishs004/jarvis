@@ -57,6 +57,27 @@ class ToolRouter:
             perf_counter(),
         )
 
+    def recover_queued_tasks(self) -> int:
+        recovered = 0
+
+        for task in self.task_manager.queued_tasks():
+            if task.cancel_requested:
+                continue
+
+            accepted = self.worker_pool.submit(
+                WorkItem(
+                    task_id=task.task_id,
+                    tool_name=task.tool_name,
+                    args=task.arguments,
+                    confirmation_id=task.confirmation_id,
+                )
+            )
+
+            if accepted:
+                recovered += 1
+
+        return recovered
+
     def _audit(
         self,
         *,

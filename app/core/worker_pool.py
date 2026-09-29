@@ -83,15 +83,13 @@ class TaskWorkerPool:
                 return
 
             self._stopping = True
+            threads = list(self._threads)
 
-        for _ in self._threads:
-            try:
-                self._queue.put_nowait(None)
-            except queue.Full:
-                break
+        for _ in threads:
+            self._queue.put(None)
 
         if wait:
-            for thread in self._threads:
+            for thread in threads:
                 thread.join(timeout=5)
 
         with self._lock:

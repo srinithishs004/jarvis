@@ -23,7 +23,19 @@ async def lifespan(app: FastAPI):
         "Task reconciliation:",
         reconciliation,
     )
-    yield
+
+    tool_router.worker_pool.start()
+
+    recovered = tool_router.recover_queued_tasks()
+    print(
+        "Queued task recovery:",
+        {"recovered": recovered},
+    )
+
+    try:
+        yield
+    finally:
+        tool_router.worker_pool.shutdown()
 
 
 app = FastAPI(

@@ -129,3 +129,17 @@ def test_reconcile_fails_running_task_with_expired_lease():
     assert "lease expired" in task.error
     assert "running-expired" in state.released
     assert repo.updated == [task]
+
+def test_queued_tasks_returns_only_queued_tasks():
+    queued = make_task(TaskStatus.QUEUED, "queued-1")
+    running = make_task(TaskStatus.RUNNING, "running-1")
+
+    repo = FakeRepository([queued, running])
+    state = FakeStateStore()
+
+    manager = TaskManager(repository=repo, state_store=state)
+    manager.reconcile_active_tasks()
+
+    result = manager.queued_tasks()
+
+    assert [task.task_id for task in result] == ["queued-1"]

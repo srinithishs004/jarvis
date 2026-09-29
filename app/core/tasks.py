@@ -293,5 +293,12 @@ class TaskManager:
 
         return summary
 
+    def queued_tasks(self) -> list[Task]:
+        return [
+            task
+            for task in self._tasks.values()
+            if task.status == TaskStatus.QUEUED
+        ]
+
     def list(self) -> list[Task]:
         return list(self._tasks.values())
