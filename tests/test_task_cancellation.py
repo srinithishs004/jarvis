@@ -72,3 +72,69 @@ def test_router_cancellation():
 
     assert final_task.status.value == "cancelled"
     assert final_task.cancel_requested is True
+
+def test_cancel_all_active_tasks():
+    from app.core.tasks import TaskManager
+    from app.models.task import TaskStatus
+
+    class FakeRepository:
+        def __init__(self):
+            self.tasks = {}
+            self.updated = []
+
+        def create(self, task):
+            self.tasks[task.task_id] = task
+
+        def list_active(self):
+            return [
+                task
+                for task in self.tasks.values()
+                if task.status in (
+                    TaskStatus.QUEUED,
+                    TaskStatus.RUNNING,
+                )
+            ]
+
+        def update(self, task):
+            self.tasks[task.task_id] = task
+            self.updated.append(task)
+
+    class FakeStateStore:
+        def __init__(self):
+            self.saved = []
+
+        def save(self, task, worker_id=None):
+            self.saved.append((task.task_id, task.status, worker_id))
+
+        def release_lease(self, task_id):
+            pass
+
+        def acquire_lease(self, task_id, worker_id):
+            return True
+
+        def get_lease(self, task_id):
+            return None
+
+    repository = FakeRepository()
+    state_store = FakeStateStore()
+
+    manager = TaskManager(
+        repository=repository,
+        state_store=state_store,
+    )
+
+    queued = manager.create("test.queued")
+    running = manager.create("test.running")
+
+    manager.mark_running(running.task_id)
+
+    cancelled = manager.cancel_all_active()
+
+    assert cancelled == 2
+
+    assert manager.get(queued.task_id).status == TaskStatus.CANCELLED
+    assert manager.get(queued.task_id).cancel_requested is True
+
+    running_task = manager.get(running.task_id)
+    assert running_task.status == TaskStatus.RUNNING
+    assert running_task.cancel_requested is True

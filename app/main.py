@@ -174,6 +174,17 @@ def get_task(task_id: str):
     }
 
 
+@app.post("/tasks/cancel-all")
+def cancel_all_tasks():
+    cancelled = tool_router.task_manager.cancel_all_active()
+
+    return {
+        "ok": True,
+        "cancelled": cancelled,
+        "message": "Global task cancellation requested",
+    }
+
+
 @app.post("/tasks/{task_id}/cancel")
 def cancel_task(task_id: str):
     try:

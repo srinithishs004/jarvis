@@ -143,6 +143,32 @@ class TaskManager:
 
         return task
 
+    def cancel_all_active(self) -> int:
+        active_tasks = self.repository.list_active()
+        cancelled = 0
+
+        for task in active_tasks:
+            self._tasks[task.task_id] = task
+
+            if task.status in (
+                TaskStatus.SUCCEEDED,
+                TaskStatus.FAILED,
+                TaskStatus.CANCELLED,
+            ):
+                continue
+
+            task.cancel_requested = True
+
+            if task.status == TaskStatus.QUEUED:
+                task.status = TaskStatus.CANCELLED
+                task.completed_at = datetime.now(timezone.utc)
+
+            self.repository.update(task)
+            self.state_store.save(task)
+            cancelled += 1
+
+        return cancelled
+
     def mark_cancelled(self, task_id: str) -> Task:
         task = self.get(task_id)
 
