@@ -1,5 +1,9 @@
 import time
 
+from dotenv import load_dotenv
+
+load_dotenv("/opt/jarvis/.env")
+
 from app.models.tool import ToolDefinition, PermissionLevel
 from app.tools.registry import ToolRegistry
 from app.tools.router import ToolRouter
@@ -35,7 +39,7 @@ def test_async_execution_can_be_cancelled():
     result = router.execute_background("test.async-long", arguments={})
 
     assert result["ok"] is True
-    assert result["status"] == "running"
+    assert result["status"] in {"queued", "running"}
 
     task_id = result["task_id"]
 
@@ -50,11 +54,20 @@ def test_async_execution_can_be_cancelled():
     assert task.status == TaskStatus.RUNNING
 
     # The worker should have acquired a lease.
-    lease = manager.state_store.get_lease(task_id)
+    lease_deadline = time.time() + 5
+    lease = None
+
+    while time.time() < lease_deadline:
+        lease = manager.state_store.get_lease(task_id)
+
+        if lease is not None:
+            break
+
+        time.sleep(0.05)
+
     assert lease is not None
     assert lease["task_id"] == task_id
     assert lease["worker_id"] == manager.worker_id
-
     # Request cancellation.
     manager.request_cancel(task_id)
 

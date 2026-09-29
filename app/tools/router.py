@@ -1,4 +1,4 @@
-import threading
+import os
 from time import perf_counter
 from typing import Any
 
@@ -9,6 +9,7 @@ from app.core.permissions import PermissionEngine
 from app.core.tasks import TaskManager
 from app.db.audit import AuditRepository
 from app.tools.registry import ToolRegistry
+from app.core.worker_pool import TaskWorkerPool, WorkItem
 
 
 class ToolRouter:
@@ -31,6 +32,30 @@ class ToolRouter:
         self.audit_repository = audit_repository or AuditRepository()
         self.task_manager = task_manager or TaskManager()
         self.executor = executor or ProcessExecutor()
+        self.worker_pool = TaskWorkerPool(
+            self._run_background_item,
+            max_workers=int(os.getenv("JARVIS_MAX_WORKERS", "2")),
+            max_queue_size=int(os.getenv("JARVIS_MAX_QUEUE", "16")),
+        )
+
+    def _run_background_item(self, item: WorkItem) -> None:
+        task = self.task_manager.get(item.task_id)
+
+        # The task may have been cancelled while waiting in the queue.
+        if task.cancel_requested or task.status.value != "queued":
+            return
+
+        tool = self.registry.get(item.tool_name)
+
+        self.task_manager.mark_running(item.task_id)
+
+        self._execute_task(
+            item.task_id,
+            tool,
+            item.args,
+            item.confirmation_id,
+            perf_counter(),
+        )
 
     def _audit(
         self,
@@ -147,27 +172,33 @@ class ToolRouter:
             arguments=arguments,
             confirmation_id=confirmation_id,
         )
-        self.task_manager.mark_running(task.task_id)
 
-        thread = threading.Thread(
-            target=self._execute_task,
-            args=(
-                task.task_id,
-                tool,
-                arguments,
-                confirmation_id,
-                started_at,
-            ),
-            daemon=True,
-            name=f"jarvis-task-{task.task_id[:8]}",
+        accepted = self.worker_pool.submit(
+            WorkItem(
+                task_id=task.task_id,
+                tool_name=name,
+                args=arguments,
+                confirmation_id=confirmation_id,
+            )
         )
-        thread.start()
+
+        if not accepted:
+            self.task_manager.request_cancel(task.task_id)
+
+            return {
+                "ok": False,
+                "tool": name,
+                "task_id": task.task_id,
+                "status": "cancelled",
+                "error": "Task queue is full",
+                "error_type": "queue_full",
+            }
 
         return {
             "ok": True,
             "tool": name,
             "task_id": task.task_id,
-            "status": "running",
+            "status": "queued",
         }
 
     def _execute_task(
