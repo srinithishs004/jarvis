@@ -17,6 +17,8 @@ from app.models.task import TaskStatus
 from app.core.orchestrator import Orchestrator
 from app.providers.factory import create_model_router
 
+from app.core.response_engine import ResponseEngine, ResponseMode
+
 load_dotenv("/opt/jarvis/.env")
 
 @asynccontextmanager
@@ -66,6 +68,8 @@ orchestrator = Orchestrator(
     tool_router=tool_router,
 )
 
+response_engine = ResponseEngine()
+
 @app.get("/health")
 def health():
     return {
@@ -110,6 +114,7 @@ def health_redis():
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1)
     route: str | None = None
+    response_mode: ResponseMode = ResponseMode.NORMAL
 
 
 @app.post("/chat")
@@ -124,13 +129,20 @@ def chat(payload: ChatRequest):
         "decision": decision.model_dump(mode="json"),
     }
 
+    execution = None
+
     if decision.type.value == "tool_call":
         execution = orchestrator.execute_tool_call(decision)
         response["execution"] = execution
         response["ok"] = execution.get("ok", False)
 
-    return response
+    response["message"] = response_engine.render(
+        decision,
+        execution,
+        mode=payload.response_mode,
+    )
 
+    return response
 
 @app.get("/tools")
 def list_tools():
