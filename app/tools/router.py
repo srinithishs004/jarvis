@@ -10,6 +10,10 @@ from app.core.tasks import TaskManager
 from app.db.audit import AuditRepository
 from app.tools.registry import ToolRegistry
 from app.core.worker_pool import TaskWorkerPool, WorkItem
+from app.core.tool_arguments import (
+    ToolArgumentError,
+    validate_tool_arguments,
+)
 
 
 class ToolRouter:
@@ -181,6 +185,29 @@ class ToolRouter:
                     "confirmation_id": request.confirmation_id,
                     "expires_at": request.expires_at.isoformat(),
                 }
+
+        try:
+            validate_tool_arguments(
+                arguments,
+                tool.input_schema,
+            )
+        except ToolArgumentError as exc:
+            self._audit(
+                event_type="invalid_tool_arguments",
+                tool_name=name,
+                success=False,
+                started_at=started_at,
+                permission_level=tool.permission.name,
+                confirmation_id=confirmation_id,
+                arguments=arguments,
+                error_type="invalid_tool_arguments",
+            )
+            return {
+                "ok": False,
+                "tool": name,
+                "error": str(exc),
+                "error_type": "invalid_tool_arguments",
+            }
 
         if tool.handler is None:
             self._audit(
@@ -417,6 +444,29 @@ class ToolRouter:
                     "confirmation_id": request.confirmation_id,
                     "expires_at": request.expires_at.isoformat(),
                 }
+
+        try:
+            validate_tool_arguments(
+                arguments,
+                tool.input_schema,
+            )
+        except ToolArgumentError as exc:
+            self._audit(
+                event_type="invalid_tool_arguments",
+                tool_name=name,
+                success=False,
+                started_at=started_at,
+                permission_level=tool.permission.name,
+                confirmation_id=confirmation_id,
+                arguments=arguments,
+                error_type="invalid_tool_arguments",
+            )
+            return {
+                "ok": False,
+                "tool": name,
+                "error": str(exc),
+                "error_type": "invalid_tool_arguments",
+            }
 
         if tool.handler is None:
             self._audit(

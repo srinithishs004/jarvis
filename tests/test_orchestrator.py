@@ -1,3 +1,7 @@
+from dotenv import load_dotenv
+
+load_dotenv("/opt/jarvis/.env")
+
 from app.core.orchestrator import Orchestrator
 from app.models.agent import AgentDecisionType
 from app.models.provider import ModelResponse
@@ -6,6 +10,11 @@ from app.providers.registry import ModelProviderRegistry
 from app.providers.router import ModelRoute, ModelRouter
 from app.tools.registry import ToolRegistry
 from app.tools.router import ToolRouter
+
+
+class FakeAuditRepository:
+    def record(self, event):
+        pass
 
 
 class FakeProvider:
@@ -39,7 +48,11 @@ def make_orchestrator(content: str):
     )
 
     tool_registry = ToolRegistry()
-    tool_router = ToolRouter(tool_registry)
+
+    tool_router = ToolRouter(
+        registry=tool_registry,
+        audit_repository=FakeAuditRepository(),
+    )
 
     return Orchestrator(
         model_router=router,
@@ -140,8 +153,6 @@ def orchestrator_test_handler(**kwargs):
 
 
 def test_tool_call_is_sent_to_tool_router():
-    calls = []
-
     registry = ToolRegistry()
 
     registry.register(
@@ -163,7 +174,10 @@ def test_tool_call_is_sent_to_tool_router():
                 ),
             )
 
-    tool_router = ToolRouter(registry)
+    tool_router = ToolRouter(
+        registry=registry,
+        audit_repository=FakeAuditRepository(),
+    )
 
     orchestrator = Orchestrator(
         model_router=FakeRouter(),
