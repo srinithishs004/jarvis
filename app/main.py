@@ -137,6 +137,39 @@ def execute_tool(
         confirmation_id=payload.get("confirmation_id"),
     )
 
+@app.post("/tasks/kill-switch")
+def activate_kill_switch():
+    cancelled = tool_router.task_manager.activate_kill_switch()
+
+    return {
+        "ok": True,
+        "active": True,
+        "cancelled": cancelled,
+        "message": "JARVIS kill switch activated",
+    }
+
+
+@app.delete("/tasks/kill-switch")
+def deactivate_kill_switch():
+    tool_router.task_manager.deactivate_kill_switch()
+
+    return {
+        "ok": True,
+        "active": False,
+        "message": "JARVIS kill switch deactivated",
+    }
+
+
+@app.get("/tasks/kill-switch")
+def get_kill_switch():
+    active = tool_router.task_manager.is_kill_switch_active()
+
+    return {
+        "ok": True,
+        "active": active,
+    }
+
+
 @app.get("/tasks/{task_id}")
 def get_task(task_id: str):
     try:

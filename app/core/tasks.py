@@ -169,6 +169,17 @@ class TaskManager:
 
         return cancelled
 
+    def activate_kill_switch(self) -> int:
+        """Persist the emergency stop before cancelling active work."""
+        self.state_store.activate_kill_switch()
+        return self.cancel_all_active()
+
+    def deactivate_kill_switch(self) -> None:
+        self.state_store.deactivate_kill_switch()
+
+    def is_kill_switch_active(self) -> bool:
+        return self.state_store.is_kill_switch_active()
+
     def mark_cancelled(self, task_id: str) -> Task:
         task = self.get(task_id)
 

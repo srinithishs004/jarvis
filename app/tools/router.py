@@ -41,6 +41,10 @@ class ToolRouter:
     def _run_background_item(self, item: WorkItem) -> None:
         task = self.task_manager.get(item.task_id)
 
+        if self.task_manager.is_kill_switch_active():
+            self.task_manager.request_cancel(item.task_id)
+            return
+
         # The task may have been cancelled while waiting in the queue.
         if task.cancel_requested or task.status.value != "queued":
             return
@@ -122,6 +126,14 @@ class ToolRouter:
         started_at = perf_counter()
         arguments = arguments or {}
 
+        if self.task_manager.is_kill_switch_active():
+            return {
+                "ok": False,
+                "tool": name,
+                "error": "JARVIS kill switch is active",
+                "error_type": "kill_switch_active",
+            }
+
         try:
             tool = self.registry.get(name)
         except KeyError as exc:
@@ -193,6 +205,17 @@ class ToolRouter:
             arguments=arguments,
             confirmation_id=confirmation_id,
         )
+
+        if self.task_manager.is_kill_switch_active():
+            self.task_manager.request_cancel(task.task_id)
+            return {
+                "ok": False,
+                "tool": name,
+                "task_id": task.task_id,
+                "status": "cancelled",
+                "error": "JARVIS kill switch is active",
+                "error_type": "kill_switch_active",
+            }
 
         accepted = self.worker_pool.submit(
             WorkItem(
@@ -337,6 +360,14 @@ class ToolRouter:
     ) -> dict[str, Any]:
         started_at = perf_counter()
         arguments = arguments or {}
+
+        if self.task_manager.is_kill_switch_active():
+            return {
+                "ok": False,
+                "tool": name,
+                "error": "JARVIS kill switch is active",
+                "error_type": "kill_switch_active",
+            }
 
         try:
             tool = self.registry.get(name)

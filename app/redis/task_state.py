@@ -8,6 +8,7 @@ from app.redis.store import RedisStore
 class TaskStateStore:
     PREFIX = "jarvis:task:"
     LEASE_PREFIX = "jarvis:task-lease:"
+    KILL_SWITCH_KEY = "jarvis:kill-switch"
     DEFAULT_TTL_SECONDS = 86400
     LEASE_TTL_SECONDS = 15
 
@@ -112,3 +113,16 @@ class TaskStateStore:
 
     def release_lease(self, task_id: str) -> None:
         self.redis.delete(self._lease_key(task_id))
+
+    def activate_kill_switch(self) -> None:
+        self.redis.set(
+            self.KILL_SWITCH_KEY,
+            {"active": True},
+        )
+
+    def deactivate_kill_switch(self) -> None:
+        self.redis.delete(self.KILL_SWITCH_KEY)
+
+    def is_kill_switch_active(self) -> bool:
+        state = self.redis.get(self.KILL_SWITCH_KEY)
+        return bool(state and state.get("active", False))
