@@ -178,3 +178,175 @@ def test_route_cannot_use_unknown_provider():
                 model="some-model",
             )
         )
+
+
+def test_factory_builds_legacy_default_route(monkeypatch):
+    from app.providers.factory import create_model_router
+
+    monkeypatch.setenv("MODEL_PROVIDER", "openai-compatible")
+    monkeypatch.setenv("MODEL_NAME", "qwen3:4b")
+    monkeypatch.setenv("MODEL_ROUTE", "default")
+    monkeypatch.setenv(
+        "MODEL_BASE_URL",
+        "http://127.0.0.1:11434/v1",
+    )
+
+    router = create_model_router()
+
+    route = router.get_route()
+
+    assert route.name == "default"
+    assert route.provider == "openai-compatible"
+    assert route.model == "qwen3:4b"
+
+
+def test_factory_builds_local_routes(monkeypatch):
+    from app.providers.factory import create_model_router
+
+    monkeypatch.delenv("MODEL_NAME", raising=False)
+    monkeypatch.delenv("MODEL_PROVIDER", raising=False)
+    monkeypatch.setenv("LOCAL_MODEL_NAME", "qwen3:1.7b")
+    monkeypatch.setenv("LOCAL_SMART_MODEL_NAME", "qwen3:4b")
+    monkeypatch.setenv("MODEL_ROUTE", "local-smart")
+
+    router = create_model_router()
+
+    assert router.get_route("local-fast").model == "qwen3:1.7b"
+    assert router.get_route("local-smart").model == "qwen3:4b"
+    assert router.get_route().name == "local-smart"
+
+
+def test_factory_builds_openrouter_route(monkeypatch):
+    from app.providers.factory import create_model_router
+
+    monkeypatch.delenv("MODEL_NAME", raising=False)
+    monkeypatch.delenv("MODEL_PROVIDER", raising=False)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setenv(
+        "OPENROUTER_MODEL",
+        "qwen/qwen3-4b:free",
+    )
+    monkeypatch.setenv("MODEL_ROUTE", "openrouter")
+
+    router = create_model_router()
+
+    route = router.get_route()
+
+    assert route.name == "openrouter"
+    assert route.provider == "openrouter"
+    assert route.model == "qwen/qwen3-4b:free"
+
+
+def test_factory_builds_openai_route(monkeypatch):
+    from app.providers.factory import create_model_router
+
+    monkeypatch.delenv("MODEL_NAME", raising=False)
+    monkeypatch.delenv("MODEL_PROVIDER", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_MODEL", "test-openai-model")
+    monkeypatch.setenv("MODEL_ROUTE", "openai")
+
+    router = create_model_router()
+
+    route = router.get_route()
+
+    assert route.name == "openai"
+    assert route.provider == "openai"
+    assert route.model == "test-openai-model"
+
+
+def test_factory_builds_anthropic_route(monkeypatch):
+    from app.providers.factory import create_model_router
+
+    monkeypatch.delenv("MODEL_NAME", raising=False)
+    monkeypatch.delenv("MODEL_PROVIDER", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv(
+        "ANTHROPIC_MODEL",
+        "test-anthropic-model",
+    )
+    monkeypatch.setenv("MODEL_ROUTE", "anthropic")
+
+    router = create_model_router()
+
+    route = router.get_route()
+
+    assert route.name == "anthropic"
+    assert route.provider == "anthropic"
+    assert route.model == "test-anthropic-model"
+
+
+def test_factory_builds_gemini_route(monkeypatch):
+    from app.providers.factory import create_model_router
+
+    monkeypatch.delenv("MODEL_NAME", raising=False)
+    monkeypatch.delenv("MODEL_PROVIDER", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_MODEL", "test-gemini-model")
+    monkeypatch.setenv("MODEL_ROUTE", "gemini")
+
+    router = create_model_router()
+
+    route = router.get_route()
+
+    assert route.name == "gemini"
+    assert route.provider == "gemini"
+    assert route.model == "test-gemini-model"
+
+
+def test_factory_ignores_unconfigured_providers(monkeypatch):
+    from app.providers.factory import create_model_router
+
+    monkeypatch.delenv("MODEL_NAME", raising=False)
+    monkeypatch.delenv("MODEL_PROVIDER", raising=False)
+    monkeypatch.setenv("LOCAL_MODEL_NAME", "qwen3:1.7b")
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_MODEL", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+    monkeypatch.setenv("MODEL_ROUTE", "local-fast")
+
+    router = create_model_router()
+
+    assert [route.name for route in router.routes()] == [
+        "local-fast",
+    ]
+
+
+def test_factory_rejects_unavailable_default_route(monkeypatch):
+    from app.providers.factory import create_model_router
+
+    monkeypatch.delenv("MODEL_NAME", raising=False)
+    monkeypatch.delenv("MODEL_PROVIDER", raising=False)
+    monkeypatch.setenv("LOCAL_MODEL_NAME", "qwen3:1.7b")
+    monkeypatch.setenv("MODEL_ROUTE", "does-not-exist")
+
+    with pytest.raises(ValueError, match="not available"):
+        create_model_router()
+
+
+def test_factory_requires_at_least_one_model_route(monkeypatch):
+    from app.providers.factory import create_model_router
+
+    for key in (
+        "MODEL_NAME",
+        "MODEL_PROVIDER",
+        "LOCAL_MODEL_NAME",
+        "LOCAL_SMART_MODEL_NAME",
+        "OPENROUTER_API_KEY",
+        "OPENROUTER_MODEL",
+        "OPENAI_API_KEY",
+        "OPENAI_MODEL",
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_MODEL",
+        "GEMINI_API_KEY",
+        "GEMINI_MODEL",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    with pytest.raises(ValueError, match="No model routes configured"):
+        create_model_router()

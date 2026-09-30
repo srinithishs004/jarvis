@@ -3,22 +3,11 @@ from typing import Any
 
 import httpx
 
-from app.models.provider import (
-    ModelProviderError,
-    ModelRequest,
-    ModelResponse,
-)
+from app.models.provider import ModelProviderError, ModelRequest, ModelResponse
 from app.providers.base import ModelProvider
 
 
 class OpenAICompatibleProvider(ModelProvider):
-    """
-    Provider for APIs implementing the OpenAI chat-completions shape.
-
-    This also works as the transport abstraction for local servers such
-    as Ollama's OpenAI-compatible endpoint.
-    """
-
     name = "openai-compatible"
 
     def __init__(
@@ -28,7 +17,9 @@ class OpenAICompatibleProvider(ModelProvider):
         api_key: str | None = None,
         default_model: str | None = None,
         timeout_seconds: float = 60.0,
+        name: str | None = None,
     ) -> None:
+        self.name = name or self.name
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.default_model = default_model
@@ -90,10 +81,12 @@ class OpenAICompatibleProvider(ModelProvider):
             )
             response.raise_for_status()
             data = response.json()
+
         except httpx.HTTPError as exc:
             raise ModelProviderError(
                 f"Model provider request failed: {exc}"
             ) from exc
+
         except ValueError as exc:
             raise ModelProviderError(
                 "Model provider returned invalid JSON"
@@ -103,6 +96,7 @@ class OpenAICompatibleProvider(ModelProvider):
             choice = data["choices"][0]
             message = choice["message"]
             content = message.get("content", "")
+
         except (KeyError, IndexError, TypeError) as exc:
             raise ModelProviderError(
                 "Model provider returned an invalid chat response"

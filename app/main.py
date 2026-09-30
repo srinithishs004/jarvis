@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from pydantic import BaseModel, Field
 import psycopg
 from upstash_redis import Redis
 
@@ -13,6 +14,8 @@ from app.tools.router import ToolRouter
 
 from app.core.confirmation import ConfirmationManager
 from app.models.task import TaskStatus
+from app.core.orchestrator import Orchestrator
+from app.providers.factory import create_model_router
 
 load_dotenv("/opt/jarvis/.env")
 
@@ -54,6 +57,15 @@ tool_router = ToolRouter(
     confirmation_manager=confirmation_manager,
 )
 
+
+model_router = create_model_router()
+
+orchestrator = Orchestrator(
+    model_router=model_router,
+    tool_registry=tool_registry,
+    tool_router=tool_router,
+)
+
 @app.get("/health")
 def health():
     return {
@@ -93,6 +105,31 @@ def health_redis():
         "service": "upstash-redis",
         "result": result,
     }
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(min_length=1)
+    route: str | None = None
+
+
+@app.post("/chat")
+def chat(payload: ChatRequest):
+    decision = orchestrator.decide(
+        payload.message,
+        route=payload.route,
+    )
+
+    response = {
+        "ok": True,
+        "decision": decision.model_dump(mode="json"),
+    }
+
+    if decision.type.value == "tool_call":
+        execution = orchestrator.execute_tool_call(decision)
+        response["execution"] = execution
+        response["ok"] = execution.get("ok", False)
+
+    return response
 
 
 @app.get("/tools")
