@@ -80,6 +80,19 @@ def test_orchestrator_parses_tool_call():
     assert decision.tool_call.arguments == {"value": 42}
 
 
+def test_orchestrator_parses_lfm_native_tool_call():
+    orchestrator = make_orchestrator(
+        "<|tool_call_start|>[system.health()]<|tool_call_end|>"
+    )
+
+    decision = orchestrator.decide("Check system health")
+
+    assert decision.type == AgentDecisionType.TOOL_CALL
+    assert decision.tool_call is not None
+    assert decision.tool_call.tool_name == "system.health"
+    assert decision.tool_call.arguments == {}
+
+
 def test_empty_input_requests_clarification():
     orchestrator = make_orchestrator(
         '{"type":"respond","content":"should not be used"}'

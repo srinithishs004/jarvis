@@ -90,49 +90,83 @@ class Orchestrator:
             arguments=tool_call.arguments,
         )
 
-    @staticmethod
-    def _system_prompt() -> str:
-        return """
+    def _available_tools_prompt(self) -> str:
+        tools = self.tool_registry.list()
+
+        if not tools:
+            return "No tools are currently available."
+
+        lines = []
+
+        for tool in tools:
+            lines.append(
+                f"- {tool.name}: {tool.description}"
+            )
+
+        return "\n".join(lines)
+
+    def _system_prompt(self) -> str:
+        return f"""
 You are the decision engine for JARVIS.
 
-Return exactly one JSON object.
+Your job is ONLY to decide what JARVIS should do.
+You do not execute tools yourself.
+
+Return exactly ONE valid JSON object.
+Do not include markdown.
+Do not include code fences.
+Do not include explanations before or after the JSON.
+
+Available tools:
+{self._available_tools_prompt()}
 
 Allowed decision types:
 
 1. respond
-{
+{{
   "type": "respond",
   "content": "..."
-}
+}}
+
+Use this when the user is asking for information or a response
+that does not require a tool.
 
 2. tool_call
-{
+{{
   "type": "tool_call",
-  "tool_call": {
-    "tool_name": "...",
-    "arguments": {}
-  }
-}
+  "tool_call": {{
+    "tool_name": "EXACT_TOOL_NAME",
+    "arguments": {{}}
+  }}
+}}
+
+Use this when an available tool is appropriate.
 
 3. plan
-{
+{{
   "type": "plan",
   "plan": ["step 1", "step 2"]
-}
+}}
+
+Use this when the request requires planning but no tool should
+be executed yet.
 
 4. clarify
-{
+{{
   "type": "clarify",
   "question": "..."
-}
+}}
+
+Use this when you need information from the user before deciding.
 
 Rules:
-- Never invent tool names.
+- Only use tool names listed under Available tools.
+- Never invent a tool name.
 - Never include executable code as a substitute for a tool call.
-- Use tool_call only when an available tool is appropriate.
-- Do not claim that a tool was executed.
-- Do not perform actions yourself.
-- Return JSON only.
+- Never claim that a tool was executed.
+- Never perform a tool action yourself.
+- Do not put commentary outside the JSON object.
+- The JSON must be valid and parseable by a strict JSON parser.
 """.strip()
 
     @staticmethod
@@ -150,6 +184,33 @@ Rules:
                 lines = lines[:-1]
 
             raw = "\n".join(lines).strip()
+
+        # LFM may emit its native tool-call format instead of JSON:
+        # <|tool_call_start|>[system.health()]<|tool_call_end|>
+        tool_start = "<|tool_call_start|>"
+        tool_end = "<|tool_call_end|>"
+
+        if raw.startswith(tool_start) and raw.endswith(tool_end):
+            tool_body = raw[len(tool_start):-len(tool_end)].strip()
+
+            # Only accept the strict no-argument form for now.
+            if (
+                tool_body.startswith("[")
+                and tool_body.endswith("]")
+                and tool_body.count("[") == 1
+                and tool_body.count("]") == 1
+                and tool_body.endswith("()]")
+            ):
+                tool_name = tool_body[1:-3].strip()
+
+                if tool_name:
+                    return AgentDecision(
+                        type=AgentDecisionType.TOOL_CALL,
+                        tool_call=AgentToolCall(
+                            tool_name=tool_name,
+                            arguments={},
+                        ),
+                    )
 
         try:
             payload = json.loads(raw)
