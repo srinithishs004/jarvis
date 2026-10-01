@@ -125,3 +125,38 @@ def test_task_lease_renew_updates_expiry():
     second = store.get_lease("renew-task")["lease_expires_at"]
 
     assert first != second
+
+
+def test_redis_store_scan_builds_command_and_parses_response(monkeypatch):
+    from app.redis.store import RedisStore
+
+    store = object.__new__(RedisStore)
+    calls = []
+
+    def fake_request(command):
+        calls.append(command)
+        return ["2", ["jarvis:task:1", "jarvis:task:2"]]
+
+    store._request = fake_request
+
+    cursor, keys = store.scan(
+        cursor=0,
+        match="jarvis:task:*",
+        count=100,
+    )
+
+    assert calls == [["SCAN", 0, "MATCH", "jarvis:task:*", "COUNT", 100]]
+    assert cursor == 2
+    assert keys == ["jarvis:task:1", "jarvis:task:2"]
+
+
+def test_redis_store_scan_rejects_invalid_response():
+    from app.redis.store import RedisStore
+
+    store = object.__new__(RedisStore)
+    store._request = lambda command: {"bad": "response"}
+
+    import pytest
+
+    with pytest.raises(RuntimeError, match="Invalid Redis SCAN response"):
+        store.scan()

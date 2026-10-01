@@ -415,3 +415,229 @@ def test_chat_reuses_session_context(api_setup):
     assert second_messages[2].content == "First answer."
     assert second_messages[3].role == "user"
     assert second_messages[3].content == "What project did I mention?"
+
+
+def test_backup_export_returns_validated_backup(api_setup, monkeypatch):
+    from app.models.backup import (
+        BackupManifest,
+        BackupRecord,
+        JarvisBackup,
+        RedisBackupEntry,
+    )
+
+    backup = JarvisBackup(
+        manifest=BackupManifest(
+            postgres={"tasks": 1},
+            redis={"entries": 1},
+        ),
+        postgres=[
+            BackupRecord(
+                table="tasks",
+                row={"id": "task-1", "status": "succeeded"},
+            )
+        ],
+        redis=[
+            RedisBackupEntry(
+                key="jarvis:session:session-1",
+                value={"messages": []},
+            )
+        ],
+    )
+
+    class FakeBackupService:
+        def create_backup(self):
+            return backup
+
+    monkeypatch.setattr(
+        main,
+        "backup_service",
+        FakeBackupService(),
+    )
+
+    with TestClient(main.app) as client:
+        response = client.post("/backup/export")
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["ok"] is True
+    assert body["backup"]["manifest"]["format_version"] == 1
+    assert body["backup"]["postgres"] == [
+        {
+            "table": "tasks",
+            "row": {
+                "id": "task-1",
+                "status": "succeeded",
+            },
+        }
+    ]
+    assert body["backup"]["redis"] == [
+        {
+            "key": "jarvis:session:session-1",
+            "value": {"messages": []},
+        }
+    ]
+
+
+def test_backup_restore_prepare_requires_valid_backup(monkeypatch):
+    class FakeBackupService:
+        def deserialize(self, payload):
+            from app.backup.service import BackupError
+            raise BackupError("Invalid JARVIS backup payload")
+
+    monkeypatch.setattr(main, "backup_service", FakeBackupService())
+
+    with TestClient(main.app) as client:
+        response = client.post(
+            "/backup/restore/prepare",
+            json={"backup": "not-json"},
+        )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["ok"] is False
+    assert body["error_type"] == "invalid_backup"
+
+
+def test_backup_restore_requires_confirmation(monkeypatch):
+    from app.models.backup import BackupManifest, JarvisBackup
+
+    backup = JarvisBackup(manifest=BackupManifest())
+
+    class FakeBackupService:
+        def deserialize(self, payload):
+            return backup
+
+        def serialize(self, value):
+            return '{"valid":true}'
+
+        def restore(self, value):
+            raise AssertionError("restore must not execute before approval")
+
+    monkeypatch.setattr(main, "backup_service", FakeBackupService())
+
+    with TestClient(main.app) as client:
+        response = client.post(
+            "/backup/restore/prepare",
+            json={"backup": '{"valid":true}'},
+        )
+
+        assert response.status_code == 200
+        prepared = response.json()
+
+        assert prepared["ok"] is True
+        assert prepared["requires_confirmation"] is True
+        confirmation_id = prepared["confirmation_id"]
+
+        response = client.post(
+            "/backup/restore",
+            json={
+                "backup": '{"valid":true}',
+                "confirmation_id": confirmation_id,
+            },
+        )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["ok"] is False
+    assert body["error_type"] == "confirmation_required"
+
+
+def test_backup_restore_confirmation_is_bound_to_payload(monkeypatch):
+    from app.models.backup import BackupManifest, JarvisBackup
+
+    backup = JarvisBackup(manifest=BackupManifest())
+
+    restored = []
+
+    class FakeBackupService:
+        def deserialize(self, payload):
+            return backup
+
+        def serialize(self, value):
+            return '{"valid":true}'
+
+        def restore(self, value):
+            restored.append(value)
+
+    monkeypatch.setattr(main, "backup_service", FakeBackupService())
+
+    with TestClient(main.app) as client:
+        response = client.post(
+            "/backup/restore/prepare",
+            json={"backup": '{"valid":true}'},
+        )
+
+        assert response.status_code == 200
+        confirmation_id = response.json()["confirmation_id"]
+
+        response = client.post(
+            "/confirmations/"
+            f"{confirmation_id}/approve",
+        )
+        assert response.status_code == 200
+        assert response.json()["approved"] is True
+
+        response = client.post(
+            "/backup/restore",
+            json={
+                "backup": '{"different":true}',
+                "confirmation_id": confirmation_id,
+            },
+        )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["ok"] is False
+    assert body["error_type"] == "confirmation_required"
+    assert restored == []
+
+
+def test_backup_restore_succeeds_after_approval(monkeypatch):
+    from app.models.backup import BackupManifest, JarvisBackup
+
+    backup = JarvisBackup(manifest=BackupManifest())
+    restored = []
+
+    class FakeBackupService:
+        def deserialize(self, payload):
+            return backup
+
+        def serialize(self, value):
+            return '{"valid":true}'
+
+        def restore(self, value):
+            restored.append(value)
+
+    monkeypatch.setattr(main, "backup_service", FakeBackupService())
+
+    with TestClient(main.app) as client:
+        response = client.post(
+            "/backup/restore/prepare",
+            json={"backup": '{"valid":true}'},
+        )
+
+        assert response.status_code == 200
+        confirmation_id = response.json()["confirmation_id"]
+
+        response = client.post(
+            f"/confirmations/{confirmation_id}/approve",
+        )
+        assert response.status_code == 200
+        assert response.json()["approved"] is True
+
+        response = client.post(
+            "/backup/restore",
+            json={
+                "backup": '{"valid":true}',
+                "confirmation_id": confirmation_id,
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert body["restored"] is True
+    assert len(restored) == 1
+    assert restored[0] is backup

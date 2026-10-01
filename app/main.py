@@ -1,9 +1,12 @@
+import hashlib
+import json
 import os
 
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 import psycopg
 from upstash_redis import Redis
@@ -21,6 +24,8 @@ from app.providers.factory import create_model_router
 
 from app.core.response_engine import ResponseEngine, ResponseMode
 from app.redis.session_state import SessionContextStore
+from app.backup.factory import create_backup_service
+from app.backup.service import BackupError
 
 load_dotenv("/opt/jarvis/.env")
 
@@ -76,6 +81,7 @@ orchestrator = Orchestrator(
 
 response_engine = ResponseEngine()
 session_store = SessionContextStore()
+backup_service = create_backup_service()
 
 @app.get("/health")
 def health():
@@ -123,6 +129,166 @@ class ChatRequest(BaseModel):
     session_id: str | None = None
     route: str | None = None
     response_mode: ResponseMode = ResponseMode.NORMAL
+
+
+@app.post("/backup/export")
+def backup_export():
+    backup = backup_service.create_backup()
+
+    return {
+        "ok": True,
+        "backup": backup.model_dump(mode="json"),
+    }
+
+
+@app.post("/backup/restore/prepare")
+def backup_restore_prepare(payload: dict):
+    backup_payload = payload.get("backup")
+
+    if not isinstance(backup_payload, str):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": "Backup payload must be a JSON string",
+                "error_type": "invalid_backup",
+            },
+        )
+
+    try:
+        backup = backup_service.deserialize(backup_payload)
+    except BackupError as exc:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": str(exc),
+                "error_type": "invalid_backup",
+            },
+        )
+
+    try:
+        canonical_payload = json.dumps(
+            json.loads(backup_payload),
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    except (TypeError, ValueError) as exc:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": "Backup payload must contain valid JSON",
+                "error_type": "invalid_backup",
+            },
+        )
+
+    context = hashlib.sha256(
+        canonical_payload.encode("utf-8")
+    ).hexdigest()
+
+    request = confirmation_manager.create(
+        "backup.restore",
+        context=context,
+    )
+
+    return {
+        "ok": True,
+        "requires_confirmation": True,
+        "confirmation_id": request.confirmation_id,
+        "expires_at": request.expires_at.isoformat(),
+        "manifest": backup.manifest.model_dump(mode="json"),
+    }
+
+
+@app.post("/backup/restore")
+def backup_restore(payload: dict):
+    backup_payload = payload.get("backup")
+    confirmation_id = payload.get("confirmation_id")
+
+    if not isinstance(backup_payload, str):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": "Backup payload must be a JSON string",
+                "error_type": "invalid_backup",
+            },
+        )
+
+    if not isinstance(confirmation_id, str) or not confirmation_id:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": "Backup restore confirmation is required",
+                "error_type": "confirmation_required",
+            },
+        )
+
+    try:
+        backup = backup_service.deserialize(backup_payload)
+    except BackupError as exc:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": str(exc),
+                "error_type": "invalid_backup",
+            },
+        )
+
+    try:
+        canonical_payload = json.dumps(
+            json.loads(backup_payload),
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    except (TypeError, ValueError) as exc:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": "Backup payload must contain valid JSON",
+                "error_type": "invalid_backup",
+            },
+        )
+
+    context = hashlib.sha256(
+        canonical_payload.encode("utf-8")
+    ).hexdigest()
+
+    if not confirmation_manager.is_approved(
+        confirmation_id,
+        "backup.restore",
+        context=context,
+    ):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": "Backup restore confirmation is required",
+                "error_type": "confirmation_required",
+            },
+        )
+
+    try:
+        backup_service.restore(backup)
+    except BackupError as exc:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": str(exc),
+                "error_type": "restore_failed",
+            },
+        )
+
+    return {
+        "ok": True,
+        "restored": True,
+        "manifest": backup.manifest.model_dump(mode="json"),
+    }
 
 
 @app.post("/chat")

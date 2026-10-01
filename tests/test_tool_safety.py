@@ -303,3 +303,20 @@ def test_permission_check_precedes_handler_execution():
 
     assert result["error_type"] == "confirmation_required"
     assert calls == []
+
+
+def test_confirmation_context_is_bound():
+    confirmations = ConfirmationManager()
+    request = confirmations.create("backup.restore", context="backup-hash-a")
+
+    assert confirmations.approve(request.confirmation_id) is True
+    assert confirmations.is_approved(
+        request.confirmation_id,
+        "backup.restore",
+        context="backup-hash-a",
+    ) is True
+    assert confirmations.is_approved(
+        request.confirmation_id,
+        "backup.restore",
+        context="backup-hash-b",
+    ) is False

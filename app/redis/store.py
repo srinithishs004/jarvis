@@ -60,3 +60,29 @@ class RedisStore:
 
     def exists(self, key: str) -> bool:
         return bool(self._request(["EXISTS", key]))
+
+    def scan(self, cursor: int = 0, match: str | None = None, count: int | None = None) -> tuple[int, list[str]]:
+        command: list[Any] = ["SCAN", cursor]
+
+        if match is not None:
+            command.extend(["MATCH", match])
+
+        if count is not None:
+            command.extend(["COUNT", count])
+
+        result = self._request(command)
+
+        if not isinstance(result, list) or len(result) != 2:
+            raise RuntimeError("Invalid Redis SCAN response")
+
+        next_cursor, keys = result
+
+        try:
+            next_cursor = int(next_cursor)
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError("Invalid Redis SCAN cursor") from exc
+
+        if not isinstance(keys, list):
+            raise RuntimeError("Invalid Redis SCAN keys")
+
+        return next_cursor, [str(key) for key in keys]
