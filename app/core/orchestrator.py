@@ -8,6 +8,7 @@ from app.models.agent import (
     AgentToolCall,
 )
 from app.models.provider import ModelMessage, ModelRequest
+from app.models.session import SessionMessage
 from app.providers.router import ModelRouter
 from app.tools.registry import ToolRegistry
 from app.tools.router import ToolRouter
@@ -37,6 +38,7 @@ class Orchestrator:
         user_input: str,
         *,
         route: str | None = None,
+        history: list[SessionMessage] | None = None,
         untrusted_content: str | None = None,
         untrusted_source: str = "external",
     ) -> AgentDecision:
@@ -51,11 +53,23 @@ class Orchestrator:
                 role="system",
                 content=self._system_prompt(),
             ),
+        ]
+
+        if history:
+            messages.extend(
+                ModelMessage(
+                    role=message.role,
+                    content=message.content,
+                )
+                for message in history
+            )
+
+        messages.append(
             ModelMessage(
                 role="user",
                 content=user_input,
-            ),
-        ]
+            )
+        )
 
         if untrusted_content is not None:
             messages.append(

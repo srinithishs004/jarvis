@@ -20,6 +20,7 @@ from app.core.orchestrator import Orchestrator
 from app.providers.factory import create_model_router
 
 from app.core.response_engine import ResponseEngine, ResponseMode
+from app.redis.session_state import SessionContextStore
 
 load_dotenv("/opt/jarvis/.env")
 
@@ -74,6 +75,7 @@ orchestrator = Orchestrator(
 )
 
 response_engine = ResponseEngine()
+session_store = SessionContextStore()
 
 @app.get("/health")
 def health():
@@ -118,19 +120,28 @@ def health_redis():
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1)
+    session_id: str | None = None
     route: str | None = None
     response_mode: ResponseMode = ResponseMode.NORMAL
 
 
 @app.post("/chat")
 def chat(payload: ChatRequest):
+    context = (
+        session_store.get(payload.session_id)
+        if payload.session_id
+        else session_store.create()
+    )
+
     decision = orchestrator.decide(
         payload.message,
         route=payload.route,
+        history=context.messages,
     )
 
     response = {
         "ok": True,
+        "session_id": context.session_id,
         "decision": decision.model_dump(mode="json"),
     }
 
@@ -145,6 +156,17 @@ def chat(payload: ChatRequest):
         decision,
         execution,
         mode=payload.response_mode,
+    )
+
+    session_store.append(
+        context.session_id,
+        role="user",
+        content=payload.message,
+    )
+    session_store.append(
+        context.session_id,
+        role="assistant",
+        content=response["message"],
     )
 
     return response

@@ -371,3 +371,47 @@ def test_chat_silent_response_mode_returns_empty_message(api_setup):
     body = response.json()
     assert body["ok"] is True
     assert body["message"] == ""
+
+
+def test_chat_reuses_session_context(api_setup):
+    provider, _, _ = api_setup
+
+    provider.responses.extend(
+        [
+            '{"type":"respond","content":"First answer."}',
+            '{"type":"respond","content":"Second answer."}',
+        ]
+    )
+
+    with TestClient(main.app) as client:
+        first = client.post(
+            "/chat",
+            json={"message": "Remember that my project is JARVIS."},
+        )
+
+        assert first.status_code == 200
+        session_id = first.json()["session_id"]
+
+        second = client.post(
+            "/chat",
+            json={
+                "session_id": session_id,
+                "message": "What project did I mention?",
+            },
+        )
+
+    assert second.status_code == 200
+    assert second.json()["session_id"] == session_id
+
+    assert len(provider.requests) == 2
+
+    second_messages = provider.requests[1].messages
+
+    assert second_messages[1].role == "user"
+    assert second_messages[1].content == (
+        "Remember that my project is JARVIS."
+    )
+    assert second_messages[2].role == "assistant"
+    assert second_messages[2].content == "First answer."
+    assert second_messages[3].role == "user"
+    assert second_messages[3].content == "What project did I mention?"
