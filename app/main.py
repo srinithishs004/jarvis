@@ -9,6 +9,8 @@ import psycopg
 from upstash_redis import Redis
 
 from app.tools.builtin import register_builtin_tools
+from app.core.capabilities import register_builtin_capabilities
+from app.tools.capability_registry import CapabilityRegistry
 from app.tools.registry import ToolRegistry
 from app.tools.router import ToolRouter
 
@@ -51,6 +53,9 @@ app = FastAPI(
 
 tool_registry = ToolRegistry()
 register_builtin_tools(tool_registry)
+
+capability_registry = CapabilityRegistry()
+register_builtin_capabilities(capability_registry, tool_registry)
 
 confirmation_manager = ConfirmationManager()
 
@@ -143,6 +148,16 @@ def chat(payload: ChatRequest):
     )
 
     return response
+
+@app.get("/capabilities")
+def list_capabilities():
+    return {
+        "capabilities": [
+            capability.model_dump(mode="json")
+            for capability in capability_registry.list()
+        ]
+    }
+
 
 @app.get("/tools")
 def list_tools():
