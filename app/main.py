@@ -262,6 +262,7 @@ def backup_restore(payload: dict):
         confirmation_id,
         "backup.restore",
         context=context,
+        consume=True,
     ):
         return JSONResponse(
             status_code=400,
