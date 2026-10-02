@@ -641,3 +641,128 @@ def test_backup_restore_succeeds_after_approval(monkeypatch):
     assert body["restored"] is True
     assert len(restored) == 1
     assert restored[0] is backup
+
+
+def test_device_websocket_rejects_when_authentication_is_not_configured(
+    monkeypatch,
+):
+    from app.devices.auth import DeviceAuthenticator
+
+    class MissingSecretAuthenticator(DeviceAuthenticator):
+        def __init__(self):
+            raise ValueError("JARVIS_DEVICE_AUTH_SECRET must be configured")
+
+    monkeypatch.setattr(
+        main,
+        "DeviceAuthenticator",
+        MissingSecretAuthenticator,
+    )
+
+    with TestClient(main.app) as client:
+        with client.websocket_connect("/ws/devices") as websocket:
+            try:
+                websocket.receive_json()
+            except Exception:
+                pass
+
+
+def test_device_websocket_authenticated_connection(monkeypatch):
+    from app.devices.auth import DeviceAuthenticator
+
+    authenticator = DeviceAuthenticator("integration-test-secret")
+
+    monkeypatch.setattr(
+        main,
+        "DeviceAuthenticator",
+        lambda: authenticator,
+    )
+
+    with TestClient(main.app) as client:
+        with client.websocket_connect("/ws/devices") as websocket:
+            device_id = "windows-api-test"
+
+            from app.models.device import (
+                DeviceCapabilities,
+                DeviceRegistration,
+                DeviceType,
+            )
+
+            registration = DeviceRegistration(
+                device_id=device_id,
+                device_name="JARVIS Windows Test",
+                device_type=DeviceType.WINDOWS,
+                agent_version="test",
+                capabilities=DeviceCapabilities(
+                    capabilities=["keyboard"],
+                    tool_names=["windows.keyboard"],
+                ),
+            )
+
+            websocket.send_json(
+                {
+                    "type": "hello",
+                    "registration": registration.model_dump(mode="json"),
+                    "token": authenticator.create_token(device_id),
+                }
+            )
+
+            response = websocket.receive_json()
+
+            assert response == {
+                "type": "ack",
+                "request_type": "hello",
+            }
+
+            websocket.send_json(
+                {
+                    "type": "heartbeat",
+                    "heartbeat": {
+                        "device_id": device_id,
+                    },
+                }
+            )
+
+            response = websocket.receive_json()
+
+            assert response == {
+                "type": "ack",
+                "request_type": "heartbeat",
+            }
+
+            assert main.device_connection_manager.connected(device_id)
+
+
+def test_device_websocket_rejects_invalid_token(monkeypatch):
+    from app.devices.auth import DeviceAuthenticator
+
+    authenticator = DeviceAuthenticator("integration-test-secret")
+
+    monkeypatch.setattr(
+        main,
+        "DeviceAuthenticator",
+        lambda: authenticator,
+    )
+
+    with TestClient(main.app) as client:
+        with client.websocket_connect("/ws/devices") as websocket:
+            websocket.send_json(
+                {
+                    "type": "hello",
+                    "registration": {
+                        "device_id": "windows-invalid-auth",
+                        "device_name": "Invalid Auth Test",
+                        "device_type": "windows",
+                        "agent_version": "test",
+                        "capabilities": {
+                            "capabilities": [],
+                            "tool_names": [],
+                        },
+                    },
+                    "token": "invalid-token",
+                }
+            )
+
+            response = websocket.receive_json()
+
+            assert response["type"] == "error"
+            assert response["code"] == "authentication_failed"

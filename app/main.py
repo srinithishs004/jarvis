@@ -5,7 +5,7 @@ import os
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 import psycopg
@@ -26,6 +26,9 @@ from app.core.response_engine import ResponseEngine, ResponseMode
 from app.redis.session_state import SessionContextStore
 from app.backup.factory import create_backup_service
 from app.backup.service import BackupError
+from app.devices.auth import DeviceAuthenticator
+from app.devices.connection import DeviceConnectionManager
+from app.devices.websocket import handle_device_websocket
 
 load_dotenv("/opt/jarvis/.env")
 
@@ -82,6 +85,23 @@ orchestrator = Orchestrator(
 response_engine = ResponseEngine()
 session_store = SessionContextStore()
 backup_service = create_backup_service()
+device_connection_manager = DeviceConnectionManager()
+
+@app.websocket("/ws/devices")
+async def device_websocket(websocket: WebSocket):
+    try:
+        authenticator = DeviceAuthenticator()
+    except ValueError:
+        await websocket.accept()
+        await websocket.close(code=1011)
+        return
+
+    await handle_device_websocket(
+        websocket,
+        connection_manager=device_connection_manager,
+        authenticator=authenticator,
+    )
+
 
 @app.get("/health")
 def health():
