@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -44,8 +45,24 @@ def run_backup(
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Run a JARVIS backup")
+    parser.add_argument(
+        "--env-file",
+        default=DEFAULT_ENV_FILE,
+        help="Environment file to load",
+    )
+    parser.add_argument(
+        "--backup-directory",
+        default=DEFAULT_BACKUP_DIRECTORY,
+        help="Directory where backups are archived",
+    )
+    args = parser.parse_args()
+
     try:
-        result = run_backup()
+        result = run_backup(
+            env_file=args.env_file,
+            backup_directory=args.backup_directory,
+        )
     except Exception as exc:
         print(f"Backup failed: {exc}")
         return 1
