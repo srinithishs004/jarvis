@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import psycopg
+from psycopg.types.json import Jsonb
 
 from app.redis.store import RedisStore
 
@@ -62,7 +63,12 @@ class PostgresBackupAdapter:
                     placeholders = ", ".join(["%s"] * len(columns))
                     column_sql = ", ".join(f'"{column}"' for column in columns)
 
-                    values = [row[column] for column in columns]
+                    values = [
+                        Jsonb(row[column])
+                        if isinstance(row[column], dict)
+                        else row[column]
+                        for column in columns
+                    ]
 
                     cur.execute(
                         f"""

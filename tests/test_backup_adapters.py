@@ -1,3 +1,5 @@
+from psycopg.types.json import Jsonb
+
 from app.backup.adapters import PostgresBackupAdapter, RedisBackupAdapter
 
 
@@ -260,3 +262,36 @@ def test_redis_adapter_skips_missing_values():
     )
 
     assert entries == []
+
+
+def test_postgres_adapter_restore_adapts_json_values(monkeypatch):
+    cursor = FakeCursor()
+    connection = FakeConnection(cursor)
+
+    def fake_connect(database_url, connect_timeout):
+        return connection
+
+    monkeypatch.setattr(
+        "app.backup.adapters.psycopg.connect",
+        fake_connect,
+    )
+
+    adapter = PostgresBackupAdapter("postgres://test")
+
+    adapter.restore(
+        [
+            {
+                "table": "tasks",
+                "row": {
+                    "id": "task-1",
+                    "metadata": {"source": "backup"},
+                },
+            }
+        ]
+    )
+
+    query, params = cursor.executed[0]
+
+    assert params[0] == "task-1"
+    assert isinstance(params[1], Jsonb)
+    assert params[1].obj == {"source": "backup"}
