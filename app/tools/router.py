@@ -5,11 +5,13 @@ from typing import Any
 from app.core.audit import AuditEvent, AuditLogger
 from app.core.confirmation import ConfirmationManager
 from app.core.executor import ProcessExecutor
+from app.core.remote_executor import RemoteToolExecutor
 from app.core.permissions import PermissionEngine
 from app.core.tasks import TaskManager
 from app.db.audit import AuditRepository
 from app.tools.registry import ToolRegistry
 from app.core.worker_pool import TaskWorkerPool, WorkItem
+from app.models.capability import ExecutionLocation
 from app.core.tool_arguments import (
     ToolArgumentError,
     validate_tool_arguments,
@@ -26,6 +28,7 @@ class ToolRouter:
         audit_repository: AuditRepository | None = None,
         task_manager: TaskManager | None = None,
         executor: ProcessExecutor | None = None,
+        remote_executor: RemoteToolExecutor | None = None,
     ) -> None:
         self.registry = registry
         self.permission_engine = permission_engine or PermissionEngine()
@@ -36,6 +39,7 @@ class ToolRouter:
         self.audit_repository = audit_repository or AuditRepository()
         self.task_manager = task_manager or TaskManager()
         self.executor = executor or ProcessExecutor()
+        self.remote_executor = remote_executor
         self.worker_pool = TaskWorkerPool(
             self._run_background_item,
             max_workers=int(os.getenv("JARVIS_MAX_WORKERS", "2")),
@@ -209,7 +213,7 @@ class ToolRouter:
                 "error_type": "invalid_tool_arguments",
             }
 
-        if tool.handler is None:
+        if tool.execution_location == ExecutionLocation.LOCAL and tool.handler is None:
             self._audit(
                 event_type="missing_handler",
                 tool_name=name,
@@ -225,6 +229,27 @@ class ToolRouter:
                 "tool": name,
                 "error": f"Tool has no handler: {name}",
                 "error_type": "missing_handler",
+            }
+
+        if (
+            tool.execution_location == ExecutionLocation.REMOTE
+            and self.remote_executor is None
+        ):
+            self._audit(
+                event_type="missing_remote_executor",
+                tool_name=name,
+                success=False,
+                started_at=started_at,
+                permission_level=tool.permission.name,
+                confirmation_id=confirmation_id,
+                arguments=arguments,
+                error_type="missing_remote_executor",
+            )
+            return {
+                "ok": False,
+                "tool": name,
+                "error": f"Tool has no remote executor: {name}",
+                "error_type": "missing_remote_executor",
             }
 
         task = self.task_manager.create(
@@ -281,17 +306,30 @@ class ToolRouter:
         started_at: float,
     ) -> None:
         try:
-            status, value = self.executor.run(
-                handler=tool.handler,
-                arguments=arguments,
-                timeout_seconds=tool.timeout_seconds,
-                cancel_check=lambda: self.task_manager.is_cancel_requested(
-                    task_id
-                ),
-                heartbeat=lambda: self.task_manager.heartbeat(
-                    task_id
-                ),
-            )
+            if tool.execution_location == ExecutionLocation.REMOTE:
+                status, value = self.remote_executor.run(
+                    tool_name=tool.name,
+                    arguments=arguments,
+                    timeout_seconds=tool.timeout_seconds,
+                    cancel_check=lambda: self.task_manager.is_cancel_requested(
+                        task_id
+                    ),
+                    heartbeat=lambda: self.task_manager.heartbeat(
+                        task_id
+                    ),
+                )
+            else:
+                status, value = self.executor.run(
+                    handler=tool.handler,
+                    arguments=arguments,
+                    timeout_seconds=tool.timeout_seconds,
+                    cancel_check=lambda: self.task_manager.is_cancel_requested(
+                        task_id
+                    ),
+                    heartbeat=lambda: self.task_manager.heartbeat(
+                        task_id
+                    ),
+                )
 
             if status == "succeeded":
                 self.task_manager.mark_succeeded(
@@ -468,7 +506,7 @@ class ToolRouter:
                 "error_type": "invalid_tool_arguments",
             }
 
-        if tool.handler is None:
+        if tool.execution_location == ExecutionLocation.LOCAL and tool.handler is None:
             self._audit(
                 event_type="missing_handler",
                 tool_name=name,
@@ -487,6 +525,28 @@ class ToolRouter:
                 "error_type": "missing_handler",
             }
 
+        if (
+            tool.execution_location == ExecutionLocation.REMOTE
+            and self.remote_executor is None
+        ):
+            self._audit(
+                event_type="missing_remote_executor",
+                tool_name=name,
+                success=False,
+                started_at=started_at,
+                permission_level=tool.permission.name,
+                confirmation_id=confirmation_id,
+                arguments=arguments,
+                error_type="missing_remote_executor",
+            )
+
+            return {
+                "ok": False,
+                "tool": name,
+                "error": f"Tool has no remote executor: {name}",
+                "error_type": "missing_remote_executor",
+            }
+
         task = self.task_manager.create(
             tool_name=name,
             arguments=arguments,
@@ -496,17 +556,30 @@ class ToolRouter:
         self.task_manager.mark_running(task.task_id)
 
         try:
-            status, value = self.executor.run(
-                handler=tool.handler,
-                arguments=arguments,
-                timeout_seconds=tool.timeout_seconds,
-                cancel_check=lambda: self.task_manager.is_cancel_requested(
-                    task.task_id
-                ),
-                heartbeat=lambda: self.task_manager.heartbeat(
-                    task.task_id
-                ),
-            )
+            if tool.execution_location == ExecutionLocation.REMOTE:
+                status, value = self.remote_executor.run(
+                    tool_name=tool.name,
+                    arguments=arguments,
+                    timeout_seconds=tool.timeout_seconds,
+                    cancel_check=lambda: self.task_manager.is_cancel_requested(
+                        task.task_id
+                    ),
+                    heartbeat=lambda: self.task_manager.heartbeat(
+                        task.task_id
+                    ),
+                )
+            else:
+                status, value = self.executor.run(
+                    handler=tool.handler,
+                    arguments=arguments,
+                    timeout_seconds=tool.timeout_seconds,
+                    cancel_check=lambda: self.task_manager.is_cancel_requested(
+                        task.task_id
+                    ),
+                    heartbeat=lambda: self.task_manager.heartbeat(
+                        task.task_id
+                    ),
+                )
 
             if status == "succeeded":
                 self.task_manager.mark_succeeded(

@@ -320,3 +320,67 @@ def test_confirmation_context_is_bound():
         "backup.restore",
         context="backup-hash-b",
     ) is False
+
+
+def test_remote_tool_executes_through_remote_executor():
+    from app.core.remote_executor import RemoteToolExecutor
+    from app.models.capability import ExecutionLocation
+
+    class FakeRemoteExecutor:
+        def __init__(self):
+            self.calls = []
+
+        def run(
+            self,
+            *,
+            tool_name,
+            arguments,
+            timeout_seconds,
+            cancel_check=None,
+            heartbeat=None,
+        ):
+            self.calls.append(
+                {
+                    "tool_name": tool_name,
+                    "arguments": arguments,
+                    "timeout_seconds": timeout_seconds,
+                }
+            )
+            return "succeeded", {"hostname": "WIN-01"}
+
+    remote = FakeRemoteExecutor()
+
+    router, _ = make_router(
+        ToolDefinition(
+            name="windows.system.info",
+            description="Read Windows system information",
+            permission=PermissionLevel.L0,
+            execution_location=ExecutionLocation.REMOTE,
+            handler=None,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "device_id": {"type": "string"},
+                },
+                "required": ["device_id"],
+                "additionalProperties": False,
+            },
+        )
+    )
+
+    router.remote_executor = remote
+
+    result = router.execute(
+        "windows.system.info",
+        {"device_id": "windows-01"},
+    )
+
+    assert result["ok"] is True
+    assert result["result"] == {"hostname": "WIN-01"}
+    assert remote.calls == [
+        {
+            "tool_name": "windows.system.info",
+            "arguments": {"device_id": "windows-01"},
+            "timeout_seconds": 30.0,
+        }
+    ]

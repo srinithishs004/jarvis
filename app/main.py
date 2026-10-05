@@ -29,6 +29,8 @@ from app.backup.service import BackupError
 from app.devices.auth import DeviceAuthenticator
 from app.devices.connection import DeviceConnectionManager
 from app.devices.commands import DeviceCommandService
+from app.core.remote_executor import RemoteToolExecutor
+from app.devices.tools import make_windows_system_info_tool
 from app.devices.websocket import handle_device_websocket
 
 load_dotenv("/opt/jarvis/.env")
@@ -64,16 +66,21 @@ app = FastAPI(
 tool_registry = ToolRegistry()
 register_builtin_tools(tool_registry)
 
-capability_registry = CapabilityRegistry()
-register_builtin_capabilities(capability_registry, tool_registry)
-
 confirmation_manager = ConfirmationManager()
+
+device_connection_manager = DeviceConnectionManager()
+device_command_service = DeviceCommandService(device_connection_manager)
+remote_tool_executor = RemoteToolExecutor(device_command_service)
 
 tool_router = ToolRouter(
     tool_registry,
     confirmation_manager=confirmation_manager,
+    remote_executor=remote_tool_executor,
 )
 
+tool_registry.register(
+    make_windows_system_info_tool()
+)
 
 model_router = create_model_router()
 
@@ -86,8 +93,9 @@ orchestrator = Orchestrator(
 response_engine = ResponseEngine()
 session_store = SessionContextStore()
 backup_service = create_backup_service()
-device_connection_manager = DeviceConnectionManager()
-device_command_service = DeviceCommandService(device_connection_manager)
+
+capability_registry = CapabilityRegistry()
+register_builtin_capabilities(capability_registry, tool_registry)
 
 @app.websocket("/ws/devices")
 async def device_websocket(websocket: WebSocket):

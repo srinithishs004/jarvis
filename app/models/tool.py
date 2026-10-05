@@ -3,6 +3,8 @@ from typing import Any, Callable
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.capability import ExecutionLocation
+
 
 class PermissionLevel(IntEnum):
     L0 = 0  # Read-only
@@ -21,3 +23,4 @@ class ToolDefinition(BaseModel):
     timeout_seconds: float = Field(default=30.0, gt=0)
     input_schema: dict[str, Any] = Field(default_factory=dict)
     handler: Callable[..., Any] | None = None
+    execution_location: ExecutionLocation = ExecutionLocation.LOCAL

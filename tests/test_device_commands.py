@@ -237,3 +237,40 @@ def test_command_service_correlates_concurrent_results():
         "result": {"text": "TWO"},
     }
     assert service.pending_count() == 0
+
+
+def test_command_service_can_be_cancelled_while_waiting():
+    connection = FakeConnectionManager()
+    service = DeviceCommandService(connection)
+
+    cancelled = threading.Event()
+    result_holder = {}
+
+    def run():
+        result_holder["result"] = service.execute(
+            "windows-01",
+            "windows.keyboard",
+            {"text": "hello"},
+            timeout_seconds=5,
+            cancel_check=cancelled.is_set,
+        )
+
+    worker = threading.Thread(target=run)
+    worker.start()
+
+    deadline = time.time() + 2
+    while not connection.sent and time.time() < deadline:
+        time.sleep(0.01)
+
+    assert connection.sent
+
+    cancelled.set()
+    worker.join(timeout=2)
+
+    assert not worker.is_alive()
+    assert result_holder["result"] == {
+        "ok": False,
+        "error": "Device command cancelled",
+        "error_type": "cancelled",
+    }
+    assert service.pending_count() == 0

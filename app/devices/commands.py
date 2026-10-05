@@ -1,7 +1,8 @@
 import asyncio
 import threading
+import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 from uuid import uuid4
 
 from app.devices.connection import DeviceConnectionManager
@@ -32,6 +33,8 @@ class DeviceCommandService:
         arguments: dict[str, Any] | None = None,
         *,
         timeout_seconds: float = 30.0,
+        cancel_check: Callable[[], bool] | None = None,
+        heartbeat: Callable[[], bool] | None = None,
     ) -> dict[str, Any]:
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be greater than zero")
@@ -63,12 +66,28 @@ class DeviceCommandService:
                     "error_type": "device_not_connected",
                 }
 
-            if not pending.event.wait(timeout_seconds):
-                return {
-                    "ok": False,
-                    "error": f"Device command timed out after {timeout_seconds} seconds",
-                    "error_type": "timeout",
-                }
+            deadline = time.monotonic() + timeout_seconds
+
+            while True:
+                if pending.event.wait(0.1):
+                    break
+
+                if cancel_check and cancel_check():
+                    return {
+                        "ok": False,
+                        "error": "Device command cancelled",
+                        "error_type": "cancelled",
+                    }
+
+                if heartbeat:
+                    heartbeat()
+
+                if time.monotonic() >= deadline:
+                    return {
+                        "ok": False,
+                        "error": f"Device command timed out after {timeout_seconds} seconds",
+                        "error_type": "timeout",
+                    }
 
             result = pending.result
 
