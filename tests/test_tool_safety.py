@@ -384,3 +384,97 @@ def test_remote_tool_executes_through_remote_executor():
             "timeout_seconds": 30.0,
         }
     ]
+
+
+def test_remote_tool_executes_end_to_end_through_device_command_service():
+    import threading
+    import time
+
+    from app.core.remote_executor import RemoteToolExecutor
+    from app.devices.commands import DeviceCommandService
+    from app.models.capability import ExecutionLocation
+    from app.models.device_protocol import DeviceCommandResult
+
+    class FakeConnectionManager:
+        def __init__(self):
+            self.sent = []
+
+        async def send(self, device_id, message):
+            self.sent.append((device_id, message))
+            return True
+
+    connection = FakeConnectionManager()
+    command_service = DeviceCommandService(connection)
+    remote_executor = RemoteToolExecutor(command_service)
+
+    router, manager = make_router(
+        ToolDefinition(
+            name="windows.system.info",
+            description="Read Windows system information",
+            permission=PermissionLevel.L0,
+            execution_location=ExecutionLocation.REMOTE,
+            handler=None,
+            timeout_seconds=2.0,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "device_id": {"type": "string"},
+                },
+                "required": ["device_id"],
+                "additionalProperties": False,
+            },
+        )
+    )
+    router.remote_executor = remote_executor
+
+    result_holder = {}
+
+    def run():
+        result_holder["result"] = router.execute(
+            "windows.system.info",
+            {"device_id": "windows-01"},
+        )
+
+    worker = threading.Thread(target=run)
+    worker.start()
+
+    deadline = time.time() + 2
+    while not connection.sent and time.time() < deadline:
+        time.sleep(0.01)
+
+    assert connection.sent
+    device_id, message = connection.sent[0]
+
+    assert device_id == "windows-01"
+    assert message["type"] == "command"
+    assert message["tool_name"] == "windows.system.info"
+    assert message["arguments"] == {}
+    assert message["request_id"]
+
+    command_service.handle_result(
+        DeviceCommandResult(
+            request_id=message["request_id"],
+            success=True,
+            result={
+                "hostname": "WIN-01",
+                "platform": "Windows-11",
+            },
+        )
+    )
+
+    worker.join(timeout=2)
+
+    assert not worker.is_alive()
+    assert result_holder["result"]["ok"] is True
+    assert result_holder["result"]["tool"] == "windows.system.info"
+    assert result_holder["result"]["result"] == {
+        "hostname": "WIN-01",
+        "platform": "Windows-11",
+    }
+
+    task = manager.get(result_holder["result"]["task_id"])
+    assert task.status.value == "succeeded"
+    assert task.result == {
+        "hostname": "WIN-01",
+        "platform": "Windows-11",
+    }
