@@ -163,7 +163,10 @@ async def handle_device_websocket(
         pass
     finally:
         if device_id is not None:
-            connection_manager.detach(device_id)
+            current = connection_manager.get(device_id)
 
-            if connection_manager.registry.exists(device_id):
-                connection_manager.registry.disconnect(device_id)
+            if current is websocket:
+                connection_manager.detach(device_id, websocket)
+
+                if connection_manager.registry.exists(device_id):
+                    connection_manager.registry.disconnect(device_id)

@@ -28,7 +28,15 @@ class DeviceConnectionManager:
 
         self._connections[device_id] = websocket
 
-    def detach(self, device_id: str) -> None:
+    def detach(self, device_id: str, websocket: WebSocket | None = None) -> None:
+        current = self._connections.get(device_id)
+
+        if current is None:
+            return
+
+        if websocket is not None and current is not websocket:
+            return
+
         self._connections.pop(device_id, None)
 
     def connected(self, device_id: str) -> bool:

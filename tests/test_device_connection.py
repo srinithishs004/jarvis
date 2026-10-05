@@ -121,3 +121,17 @@ def test_connection_manager_replaces_existing_connection():
 
     assert first.closed is True
     assert manager.get("windows-01") is second
+
+
+def test_connection_manager_old_socket_cannot_detach_replacement():
+    manager = make_manager()
+    first = FakeWebSocket()
+    second = FakeWebSocket()
+
+    asyncio.run(manager.attach("windows-01", first))
+    asyncio.run(manager.attach("windows-01", second))
+
+    manager.detach("windows-01", first)
+
+    assert manager.connected("windows-01")
+    assert manager.get("windows-01") is second
