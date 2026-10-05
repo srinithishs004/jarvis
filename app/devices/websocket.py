@@ -3,9 +3,11 @@ from pydantic import ValidationError
 
 from app.devices.auth import DeviceAuthenticator
 from app.devices.connection import DeviceConnectionManager
+from app.devices.commands import DeviceCommandService
 from app.models.device_protocol import (
     DeviceAck,
     DeviceCapabilitiesMessage,
+    DeviceCommandResult,
     DeviceError,
     DeviceHeartbeatMessage,
     DeviceHello,
@@ -17,6 +19,7 @@ async def handle_device_websocket(
     *,
     connection_manager: DeviceConnectionManager,
     authenticator: DeviceAuthenticator,
+    command_service: DeviceCommandService | None = None,
 ) -> None:
     await websocket.accept()
 
@@ -117,6 +120,23 @@ async def handle_device_websocket(
                         request_type="heartbeat",
                     ).model_dump()
                 )
+                continue
+
+            if message_type == "command_result":
+                try:
+                    message = DeviceCommandResult.model_validate(raw)
+                except ValidationError:
+                    await websocket.send_json(
+                        DeviceError(
+                            code="invalid_message",
+                            message="Invalid command result message",
+                        ).model_dump()
+                    )
+                    continue
+
+                if command_service is not None:
+                    command_service.handle_result(message)
+
                 continue
 
             if message_type == "capabilities":

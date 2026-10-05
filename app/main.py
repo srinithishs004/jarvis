@@ -28,6 +28,7 @@ from app.backup.factory import create_backup_service
 from app.backup.service import BackupError
 from app.devices.auth import DeviceAuthenticator
 from app.devices.connection import DeviceConnectionManager
+from app.devices.commands import DeviceCommandService
 from app.devices.websocket import handle_device_websocket
 
 load_dotenv("/opt/jarvis/.env")
@@ -86,6 +87,7 @@ response_engine = ResponseEngine()
 session_store = SessionContextStore()
 backup_service = create_backup_service()
 device_connection_manager = DeviceConnectionManager()
+device_command_service = DeviceCommandService(device_connection_manager)
 
 @app.websocket("/ws/devices")
 async def device_websocket(websocket: WebSocket):
@@ -100,6 +102,7 @@ async def device_websocket(websocket: WebSocket):
         websocket,
         connection_manager=device_connection_manager,
         authenticator=authenticator,
+        command_service=device_command_service,
     )
 
 

@@ -319,3 +319,47 @@ def test_malformed_capabilities_returns_error_and_connection_continues():
         "message": "Invalid capabilities message",
     }
     assert websocket.sent[2]["code"] == "unknown_message_type"
+
+
+def test_command_result_is_forwarded_to_command_service():
+    auth = DeviceAuthenticator("test-secret")
+    manager = make_manager()
+
+    class FakeCommandService:
+        def __init__(self):
+            self.results = []
+
+        def handle_result(self, result):
+            self.results.append(result)
+            return True
+
+    command_service = FakeCommandService()
+
+    websocket = FakeWebSocket([
+        hello(auth),
+        {
+            "type": "command_result",
+            "request_id": "req-123",
+            "success": True,
+            "result": {"typed": True},
+        },
+        RuntimeError("stop"),
+    ])
+
+    try:
+        asyncio.run(
+            handle_device_websocket(
+                websocket,
+                connection_manager=manager,
+                authenticator=auth,
+                command_service=command_service,
+            )
+        )
+    except RuntimeError:
+        pass
+
+    assert len(command_service.results) == 1
+    result = command_service.results[0]
+    assert result.request_id == "req-123"
+    assert result.success is True
+    assert result.result == {"typed": True}
