@@ -31,6 +31,13 @@ def test_allowed_application_set_is_explicit():
     )
 
 
+def test_launch_application_rejects_non_allowlisted_application():
+    operation = object.__new__(NativeWindowsOperations)
+
+    with pytest.raises(ValueError, match="Application is not allowlisted"):
+        operation.launch_application("powershell.exe")
+
+
 @pytest.mark.parametrize(
     "window_id",
     [
