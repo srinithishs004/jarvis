@@ -57,6 +57,36 @@ class DeviceRegistry:
         self.state_store.save(device)
         return device
 
+    def mark_stale_devices(
+        self,
+        *,
+        now: datetime | None = None,
+        timeout_seconds: float = 60.0,
+    ) -> list[DeviceConnection]:
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be greater than zero")
+
+        now = now or datetime.now(timezone.utc)
+        stale_devices: list[DeviceConnection] = []
+
+        for device in self._devices.values():
+            if device.status != DeviceStatus.ONLINE:
+                continue
+
+            last_heartbeat = device.last_heartbeat_at
+            if last_heartbeat.tzinfo is None:
+                last_heartbeat = last_heartbeat.replace(tzinfo=timezone.utc)
+
+            age_seconds = (now - last_heartbeat).total_seconds()
+
+            if age_seconds >= timeout_seconds:
+                device.status = DeviceStatus.OFFLINE
+                self._devices[device.device_id] = device
+                self.state_store.save(device)
+                stale_devices.append(device)
+
+        return stale_devices
+
     def update_capabilities(
         self,
         device_id: str,

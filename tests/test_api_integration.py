@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from typing import Any
 
 import pytest
@@ -766,3 +768,34 @@ def test_device_websocket_rejects_invalid_token(monkeypatch):
 
             assert response["type"] == "error"
             assert response["code"] == "authentication_failed"
+
+
+def test_app_lifespan_starts_and_stops_device_monitor(monkeypatch):
+    class FakeMonitor:
+        instances = []
+
+        def __init__(self, *args, **kwargs):
+            self.started = False
+            self.stopped = False
+            self.run_calls = 0
+            self.stop_event = asyncio.Event()
+            FakeMonitor.instances.append(self)
+
+        async def run(self):
+            self.started = True
+            self.run_calls += 1
+            await self.stop_event.wait()
+
+        def stop(self):
+            self.stopped = True
+            self.stop_event.set()
+
+    monkeypatch.setattr(main, "DeviceLifecycleMonitor", FakeMonitor)
+
+    with TestClient(main.app):
+        assert len(FakeMonitor.instances) == 1
+        monitor = FakeMonitor.instances[0]
+        assert monitor.started is True
+        assert monitor.run_calls == 1
+
+    assert monitor.stopped is True

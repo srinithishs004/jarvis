@@ -110,6 +110,46 @@ def test_disconnect_marks_device_offline():
     assert device.status == DeviceStatus.OFFLINE
 
 
+def test_mark_stale_devices_marks_expired_online_devices_offline():
+    registry, state = make_registry()
+
+    device = registry.register(registration())
+    device.last_heartbeat_at = datetime(
+        2026, 10, 2, 18, 0, tzinfo=timezone.utc
+    )
+    state.save(device)
+
+    now = datetime(2026, 10, 2, 18, 1, tzinfo=timezone.utc)
+
+    stale = registry.mark_stale_devices(
+        now=now,
+        timeout_seconds=60,
+    )
+
+    assert [device.device_id for device in stale] == ["windows-01"]
+    assert registry.get("windows-01").status == DeviceStatus.OFFLINE
+
+
+def test_mark_stale_devices_keeps_recent_devices_online():
+    registry, state = make_registry()
+
+    device = registry.register(registration())
+    device.last_heartbeat_at = datetime(
+        2026, 10, 2, 18, 0, tzinfo=timezone.utc
+    )
+    state.save(device)
+
+    now = datetime(2026, 10, 2, 18, 0, 30, tzinfo=timezone.utc)
+
+    stale = registry.mark_stale_devices(
+        now=now,
+        timeout_seconds=60,
+    )
+
+    assert stale == []
+    assert registry.get("windows-01").status == DeviceStatus.ONLINE
+
+
 def test_disconnect_requires_registered_device():
     registry, _ = make_registry()
 

@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import json
 import os
@@ -29,6 +30,7 @@ from app.backup.service import BackupError
 from app.devices.auth import DeviceAuthenticator
 from app.devices.connection import DeviceConnectionManager
 from app.devices.commands import DeviceCommandService
+from app.devices.monitor import DeviceLifecycleMonitor
 from app.core.remote_executor import RemoteToolExecutor
 from app.devices.tools import make_windows_system_info_tool
 from app.devices.websocket import handle_device_websocket
@@ -45,6 +47,19 @@ async def lifespan(app: FastAPI):
 
     tool_router.worker_pool.start()
 
+    device_lifecycle_monitor = DeviceLifecycleMonitor(
+        device_connection_manager,
+        timeout_seconds=float(
+            os.getenv("JARVIS_DEVICE_HEARTBEAT_TIMEOUT_SECONDS", "60")
+        ),
+        interval_seconds=float(
+            os.getenv("JARVIS_DEVICE_HEARTBEAT_CHECK_INTERVAL_SECONDS", "10")
+        ),
+    )
+    device_monitor_task = asyncio.create_task(
+        device_lifecycle_monitor.run()
+    )
+
     recovered = tool_router.recover_queued_tasks()
     print(
         "Queued task recovery:",
@@ -54,6 +69,8 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        device_lifecycle_monitor.stop()
+        await device_monitor_task
         tool_router.worker_pool.shutdown()
 
 
