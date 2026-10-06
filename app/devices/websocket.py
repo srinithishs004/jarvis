@@ -48,7 +48,17 @@ async def handle_device_websocket(
             await websocket.close(code=1008)
             return
 
-        hello = DeviceHello.model_validate(raw)
+        try:
+            hello = DeviceHello.model_validate(raw)
+        except ValidationError:
+            await websocket.send_json(
+                DeviceError(
+                    code="invalid_message",
+                    message="Invalid hello message",
+                ).model_dump()
+            )
+            await websocket.close(code=1008)
+            return
         registration = hello.registration
         device_id = registration.device_id
 

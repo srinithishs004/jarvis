@@ -363,3 +363,29 @@ def test_command_result_is_forwarded_to_command_service():
     assert result.request_id == "req-123"
     assert result.success is True
     assert result.result == {"typed": True}
+
+
+def test_malformed_hello_returns_error_and_closes_connection():
+    auth = DeviceAuthenticator("test-secret")
+    manager = make_manager()
+
+    websocket = FakeWebSocket([
+        {
+            "type": "hello",
+            "registration": {},
+            "token": "invalid",
+        },
+    ])
+
+    asyncio.run(
+        handle_device_websocket(
+            websocket,
+            connection_manager=manager,
+            authenticator=auth,
+        )
+    )
+
+    assert websocket.closed is True
+    assert websocket.sent[0]["type"] == "error"
+    assert websocket.sent[0]["code"] == "invalid_message"
+    assert websocket.sent[0]["message"] == "Invalid hello message"
