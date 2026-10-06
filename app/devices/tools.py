@@ -181,3 +181,46 @@ def make_windows_clipboard_write_tool() -> ToolDefinition:
         },
         required=["device_id", "text"],
     )
+
+
+def make_windows_filesystem_read_tool() -> ToolDefinition:
+    return _windows_tool(
+        name="windows.filesystem.read",
+        description="Read a text file beneath the configured Windows JARVIS filesystem root",
+        permission=PermissionLevel.L1,
+        timeout_seconds=15.0,
+        properties={
+            "device_id": {"type": "string"},
+            "path": {"type": "string"},
+        },
+        required=["device_id", "path"],
+    )
+
+
+def make_windows_filesystem_list_tool() -> ToolDefinition:
+    return _windows_tool(
+        name="windows.filesystem.list",
+        description="List entries in a directory beneath the configured Windows JARVIS filesystem root",
+        permission=PermissionLevel.L1,
+        timeout_seconds=15.0,
+        properties={
+            "device_id": {"type": "string"},
+            "path": {"type": "string"},
+        },
+        required=["device_id", "path"],
+    )
+
+
+def make_windows_filesystem_write_tool() -> ToolDefinition:
+    return _windows_tool(
+        name="windows.filesystem.write",
+        description="Write text to a file beneath the configured Windows JARVIS filesystem root",
+        permission=PermissionLevel.L2,
+        timeout_seconds=20.0,
+        properties={
+            "device_id": {"type": "string"},
+            "path": {"type": "string"},
+            "text": {"type": "string"},
+        },
+        required=["device_id", "path", "text"],
+    )

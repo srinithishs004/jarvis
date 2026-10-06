@@ -33,6 +33,7 @@ def make_client():
         device_id="windows-test",
         device_name="Test PC",
         auth_secret="test-secret",
+        filesystem_root=".",
         heartbeat_interval_seconds=999,
     )
 
@@ -144,6 +145,7 @@ def make_client_with_fake_operations():
         device_id="windows-test",
         device_name="Test PC",
         auth_secret="test-secret",
+        filesystem_root=".",
         heartbeat_interval_seconds=999,
     )
 
@@ -261,6 +263,7 @@ def test_client_returns_structured_error_for_operation_failure():
         device_id="windows-test",
         device_name="Test PC",
         auth_secret="test-secret",
+        filesystem_root=".",
         heartbeat_interval_seconds=999,
     )
 

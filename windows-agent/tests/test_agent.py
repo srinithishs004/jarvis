@@ -55,6 +55,9 @@ def test_hello_contains_windows_registration():
             "mouse.click",
             "clipboard.read",
             "clipboard.write",
+            "filesystem.read",
+            "filesystem.list",
+            "filesystem.write",
         ],
         "tool_names": [
             "windows.system.info",
@@ -66,8 +69,11 @@ def test_hello_contains_windows_registration():
             "windows.keyboard.press",
             "windows.mouse.move",
             "windows.mouse.click",
-        "windows.clipboard.read",
-        "windows.clipboard.write",
+            "windows.clipboard.read",
+            "windows.clipboard.write",
+            "windows.filesystem.read",
+            "windows.filesystem.list",
+            "windows.filesystem.write",
         ],
     }
 
@@ -165,6 +171,18 @@ class FakeWindowsOperations:
         self.calls.append(("focus_window", window_id))
         return {"window_id": window_id, "focused": True}
 
+    def read_file(self, path):
+        self.calls.append(("read_file", path))
+        return {"path": path, "text": "hello"}
+
+    def list_directory(self, path):
+        self.calls.append(("list_directory", path))
+        return {"path": path, "entries": []}
+
+    def write_file(self, path, text):
+        self.calls.append(("write_file", path, text))
+        return {"path": path, "written": True}
+
 
 def test_executor_allows_app_list():
     operations = FakeWindowsOperations()
@@ -230,6 +248,47 @@ def test_executor_allows_window_focus():
     ]
 
 
+def test_filesystem_read_delegates_to_operations():
+    operations = FakeWindowsOperations()
+    executor = CommandExecutor(operations=operations)
+
+    result = executor.execute(
+        "windows.filesystem.read",
+        {"path": "notes.txt"},
+    )
+
+    assert result == {"path": "notes.txt", "text": "hello"}
+    assert operations.calls == [("read_file", "notes.txt")]
+
+
+def test_filesystem_list_delegates_to_operations():
+    operations = FakeWindowsOperations()
+    executor = CommandExecutor(operations=operations)
+
+    result = executor.execute(
+        "windows.filesystem.list",
+        {"path": "docs"},
+    )
+
+    assert result == {"path": "docs", "entries": []}
+    assert operations.calls == [("list_directory", "docs")]
+
+
+def test_filesystem_write_delegates_to_operations():
+    operations = FakeWindowsOperations()
+    executor = CommandExecutor(operations=operations)
+
+    result = executor.execute(
+        "windows.filesystem.write",
+        {"path": "notes.txt", "text": "hello"},
+    )
+
+    assert result == {"path": "notes.txt", "written": True}
+    assert operations.calls == [("write_file", "notes.txt", "hello")]
+
+
+
+
 @pytest.mark.parametrize(
     ("tool_name", "arguments"),
     [
@@ -277,6 +336,9 @@ def test_hello_advertises_all_allowlisted_windows_tools():
         "mouse.click",
         "clipboard.read",
         "clipboard.write",
+        "filesystem.read",
+        "filesystem.list",
+        "filesystem.write",
     ]
 
     assert capabilities["tool_names"] == [
@@ -291,6 +353,9 @@ def test_hello_advertises_all_allowlisted_windows_tools():
         "windows.mouse.click",
         "windows.clipboard.read",
         "windows.clipboard.write",
+        "windows.filesystem.read",
+        "windows.filesystem.list",
+        "windows.filesystem.write",
     ]
 
 
@@ -333,6 +398,18 @@ class InputOperations:
     def write_clipboard(self, text):
         self.calls.append(("write_clipboard", text))
         return {"written": text}
+
+    def read_file(self, path):
+        self.calls.append(("read_file", path))
+        return {"path": path}
+
+    def list_directory(self, path):
+        self.calls.append(("list_directory", path))
+        return {"path": path}
+
+    def write_file(self, path, text):
+        self.calls.append(("write_file", path, text))
+        return {"path": path, "text": text}
 
 
 def test_keyboard_type_delegates_to_operations():

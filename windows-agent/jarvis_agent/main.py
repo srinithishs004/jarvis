@@ -14,7 +14,7 @@ def main() -> None:
     )
 
     config = AgentConfig.from_environment()
-    operations = NativeWindowsOperations()
+    operations = NativeWindowsOperations(filesystem_root=config.filesystem_root)
     executor = CommandExecutor(operations=operations)
     client = JarvisAgentClient(config, executor)
 

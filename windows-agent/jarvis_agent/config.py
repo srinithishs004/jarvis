@@ -8,6 +8,7 @@ class AgentConfig:
     device_id: str
     device_name: str
     auth_secret: str
+    filesystem_root: str
     agent_version: str = "0.1.0"
     heartbeat_interval_seconds: float = 20.0
 
@@ -17,6 +18,7 @@ class AgentConfig:
         device_id = os.environ.get("JARVIS_DEVICE_ID")
         device_name = os.environ.get("JARVIS_DEVICE_NAME")
         auth_secret = os.environ.get("JARVIS_DEVICE_AUTH_SECRET")
+        filesystem_root = os.environ.get("JARVIS_FILESYSTEM_ROOT")
 
         missing = [
             name
@@ -25,6 +27,7 @@ class AgentConfig:
                 ("JARVIS_DEVICE_ID", device_id),
                 ("JARVIS_DEVICE_NAME", device_name),
                 ("JARVIS_DEVICE_AUTH_SECRET", auth_secret),
+                ("JARVIS_FILESYSTEM_ROOT", filesystem_root),
             )
             if not value
         ]
@@ -40,4 +43,5 @@ class AgentConfig:
             device_id=device_id,
             device_name=device_name,
             auth_secret=auth_secret,
+            filesystem_root=filesystem_root,
         )

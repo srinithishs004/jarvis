@@ -14,6 +14,9 @@ WINDOWS_TOOL_NAMES = frozenset(
         "windows.mouse.click",
         "windows.clipboard.read",
         "windows.clipboard.write",
+        "windows.filesystem.read",
+        "windows.filesystem.list",
+        "windows.filesystem.write",
     }
 )
 
@@ -30,6 +33,9 @@ WINDOWS_CAPABILITY_NAMES = frozenset(
         "mouse.click",
         "clipboard.read",
         "clipboard.write",
+        "filesystem.read",
+        "filesystem.list",
+        "filesystem.write",
     }
 )
 

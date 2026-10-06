@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 
@@ -94,11 +95,139 @@ class NativeWindowsOperations:
         }
     )
 
-    def __init__(self) -> None:
+    MAX_FILE_SIZE_BYTES = 1024 * 1024
+
+    def __init__(self, filesystem_root: str) -> None:
         if os.name != "nt":
             raise RuntimeError(
                 "NativeWindowsOperations requires Windows"
             )
+
+        if not isinstance(filesystem_root, str) or not filesystem_root.strip():
+            raise ValueError("filesystem_root must be a non-empty string")
+
+        root = Path(filesystem_root).expanduser().resolve(strict=True)
+        if not root.is_dir():
+            raise ValueError("filesystem_root must be an existing directory")
+
+        self._filesystem_root = root
+
+    def read_file(self, path: str) -> dict[str, Any]:
+        target = self._resolve_filesystem_path(path, must_exist=True)
+
+        if not target.is_file() or target.is_symlink():
+            raise ValueError("Filesystem path is not a regular file")
+
+        size = target.stat().st_size
+        if size > self.MAX_FILE_SIZE_BYTES:
+            raise ValueError("File exceeds the maximum allowed size")
+
+        try:
+            text = target.read_text(encoding="utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError("File is not valid UTF-8 text") from exc
+
+        return {
+            "path": self._relative_filesystem_path(target),
+            "text": text,
+            "bytes": len(text.encode("utf-8")),
+        }
+
+    def list_directory(self, path: str) -> dict[str, Any]:
+        target = self._resolve_filesystem_path(path, must_exist=True)
+
+        if not target.is_dir() or target.is_symlink():
+            raise ValueError("Filesystem path is not a directory")
+
+        entries: list[dict[str, Any]] = []
+        for entry in sorted(target.iterdir(), key=lambda item: item.name.lower()):
+            if entry.is_symlink():
+                raise ValueError(
+                    f"Directory contains unsupported symlink: {entry.name}"
+                )
+
+            item: dict[str, Any] = {
+                "name": entry.name,
+                "type": "directory" if entry.is_dir() else "file",
+            }
+
+            if entry.is_file():
+                item["bytes"] = entry.stat().st_size
+
+            entries.append(item)
+
+        return {
+            "path": self._relative_filesystem_path(target),
+            "entries": entries,
+        }
+
+    def write_file(self, path: str, text: str) -> dict[str, Any]:
+        if not isinstance(text, str):
+            raise ValueError("text must be a string")
+
+        if len(text.encode("utf-8")) > self.MAX_FILE_SIZE_BYTES:
+            raise ValueError("Text exceeds the maximum allowed file size")
+
+        target = self._resolve_filesystem_path(path, must_exist=False)
+
+        if target.exists():
+            if not target.is_file() or target.is_symlink():
+                raise ValueError("Filesystem path is not a regular file")
+
+        parent = target.parent
+        if not parent.is_dir() or parent.is_symlink():
+            raise ValueError("Parent directory is invalid")
+
+        target.write_text(text, encoding="utf-8")
+
+        return {
+            "path": self._relative_filesystem_path(target),
+            "bytes": len(text.encode("utf-8")),
+            "written": True,
+        }
+
+    def _resolve_filesystem_path(
+        self,
+        path: str,
+        *,
+        must_exist: bool,
+    ) -> Path:
+        if not isinstance(path, str) or not path.strip():
+            raise ValueError("Filesystem path must be a non-empty string")
+
+        if "\x00" in path:
+            raise ValueError("Filesystem path contains a null byte")
+
+        candidate_path = Path(path)
+
+        if candidate_path.is_absolute() or candidate_path.drive:
+            raise ValueError("Absolute filesystem paths are not allowed")
+
+        if ".." in candidate_path.parts:
+            raise ValueError("Parent traversal is not allowed")
+
+        candidate = self._filesystem_root / candidate_path
+
+        current = self._filesystem_root
+        for part in candidate_path.parts:
+            current = current / part
+            if current.is_symlink() or current.is_junction():
+                raise ValueError("Symlinks and junctions are not allowed")
+
+        if must_exist:
+            resolved = candidate.resolve(strict=True)
+        else:
+            resolved = candidate.resolve(strict=False)
+
+        try:
+            resolved.relative_to(self._filesystem_root)
+        except ValueError as exc:
+            raise ValueError("Filesystem path escapes configured root") from exc
+
+        return resolved
+
+    def _relative_filesystem_path(self, path: Path) -> str:
+        return path.relative_to(self._filesystem_root).as_posix()
 
     def list_applications(self) -> list[dict[str, Any]]:
         import ctypes

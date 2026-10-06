@@ -36,6 +36,15 @@ class WindowsOperations(Protocol):
     def write_clipboard(self, text: str) -> Any:
         ...
 
+    def read_file(self, path: str) -> Any:
+        ...
+
+    def list_directory(self, path: str) -> Any:
+        ...
+
+    def write_file(self, path: str, text: str) -> Any:
+        ...
+
 
 class CommandExecutor:
     """Execute the small, explicitly allowlisted set of agent tools."""
@@ -58,6 +67,9 @@ class CommandExecutor:
             "windows.mouse.click": self._mouse_click,
             "windows.clipboard.read": self._clipboard_read,
             "windows.clipboard.write": self._clipboard_write,
+            "windows.filesystem.read": self._filesystem_read,
+            "windows.filesystem.list": self._filesystem_list,
+            "windows.filesystem.write": self._filesystem_write,
         }
 
     def execute(
@@ -226,6 +238,59 @@ class CommandExecutor:
 
         return self._operations.write_clipboard(arguments["text"])
 
+    def _filesystem_read(self, arguments: dict[str, Any]) -> Any:
+        self._require_string_argument(
+            arguments,
+            tool_name="windows.filesystem.read",
+            argument_name="path",
+        )
+
+        if set(arguments) != {"path"}:
+            raise ValueError(
+                "Invalid arguments: windows.filesystem.read expects only 'path'"
+            )
+
+        return self._operations.read_file(arguments["path"])
+
+
+    def _filesystem_list(self, arguments: dict[str, Any]) -> Any:
+        self._require_string_argument(
+            arguments,
+            tool_name="windows.filesystem.list",
+            argument_name="path",
+        )
+
+        if set(arguments) != {"path"}:
+            raise ValueError(
+                "Invalid arguments: windows.filesystem.list expects only 'path'"
+            )
+
+        return self._operations.list_directory(arguments["path"])
+
+
+    def _filesystem_write(self, arguments: dict[str, Any]) -> Any:
+        self._require_string_argument(
+            arguments,
+            tool_name="windows.filesystem.write",
+            argument_name="path",
+        )
+        self._require_string_argument(
+            arguments,
+            tool_name="windows.filesystem.write",
+            argument_name="text",
+        )
+
+        if set(arguments) != {"path", "text"}:
+            raise ValueError(
+                "Invalid arguments: windows.filesystem.write expects only "
+                "'path' and 'text'"
+            )
+
+        return self._operations.write_file(
+            arguments["path"],
+            arguments["text"],
+        )
+
     @staticmethod
     def _require_coordinate_arguments(
         arguments: dict[str, Any],
@@ -306,3 +371,12 @@ class _DefaultWindowsOperations:
 
     def write_clipboard(self, text: str) -> Any:
         raise RuntimeError("Windows clipboard operations are unavailable")
+
+    def read_file(self, path: str) -> Any:
+        raise RuntimeError("Windows filesystem operations are unavailable")
+
+    def list_directory(self, path: str) -> Any:
+        raise RuntimeError("Windows filesystem operations are unavailable")
+
+    def write_file(self, path: str, text: str) -> Any:
+        raise RuntimeError("Windows filesystem operations are unavailable")

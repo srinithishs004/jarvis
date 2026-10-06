@@ -20,6 +20,9 @@ def test_windows_tool_allowlist_contains_registered_windows_tools():
         "windows.mouse.click",
         "windows.clipboard.read",
         "windows.clipboard.write",
+        "windows.filesystem.read",
+        "windows.filesystem.list",
+        "windows.filesystem.write",
     }
 
 
@@ -36,6 +39,9 @@ def test_windows_capability_allowlist_contains_expected_capabilities():
         "mouse.click",
         "clipboard.read",
         "clipboard.write",
+        "filesystem.read",
+        "filesystem.list",
+        "filesystem.write",
     }
 
 
