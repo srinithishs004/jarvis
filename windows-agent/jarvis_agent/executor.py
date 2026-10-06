@@ -30,6 +30,12 @@ class WindowsOperations(Protocol):
     def click_mouse(self, x: int, y: int, button: str) -> Any:
         ...
 
+    def read_clipboard(self) -> Any:
+        ...
+
+    def write_clipboard(self, text: str) -> Any:
+        ...
+
 
 class CommandExecutor:
     """Execute the small, explicitly allowlisted set of agent tools."""
@@ -50,6 +56,8 @@ class CommandExecutor:
             "windows.keyboard.press": self._keyboard_press,
             "windows.mouse.move": self._mouse_move,
             "windows.mouse.click": self._mouse_click,
+            "windows.clipboard.read": self._clipboard_read,
+            "windows.clipboard.write": self._clipboard_write,
         }
 
     def execute(
@@ -196,6 +204,28 @@ class CommandExecutor:
             arguments["button"],
         )
 
+    def _clipboard_read(self, arguments: dict[str, Any]) -> Any:
+        if arguments:
+            raise ValueError(
+                "Invalid arguments: windows.clipboard.read does not accept arguments"
+            )
+
+        return self._operations.read_clipboard()
+
+    def _clipboard_write(self, arguments: dict[str, Any]) -> Any:
+        self._require_string_argument(
+            arguments,
+            tool_name="windows.clipboard.write",
+            argument_name="text",
+        )
+
+        if set(arguments) != {"text"}:
+            raise ValueError(
+                "Invalid arguments: windows.clipboard.write expects only 'text'"
+            )
+
+        return self._operations.write_clipboard(arguments["text"])
+
     @staticmethod
     def _require_coordinate_arguments(
         arguments: dict[str, Any],
@@ -270,3 +300,9 @@ class _DefaultWindowsOperations:
 
     def click_mouse(self, x: int, y: int, button: str) -> Any:
         raise RuntimeError("Windows mouse operations are unavailable")
+
+    def read_clipboard(self) -> Any:
+        raise RuntimeError("Windows clipboard operations are unavailable")
+
+    def write_clipboard(self, text: str) -> Any:
+        raise RuntimeError("Windows clipboard operations are unavailable")

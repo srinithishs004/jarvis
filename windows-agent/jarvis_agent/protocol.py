@@ -27,6 +27,8 @@ def make_hello(
                     "keyboard.press",
                     "mouse.move",
                     "mouse.click",
+                    "clipboard.read",
+                    "clipboard.write",
                 ],
                 "tool_names": [
                     "windows.system.info",
@@ -38,6 +40,8 @@ def make_hello(
                     "windows.keyboard.press",
                     "windows.mouse.move",
                     "windows.mouse.click",
+                    "windows.clipboard.read",
+                    "windows.clipboard.write",
                 ],
             },
         },

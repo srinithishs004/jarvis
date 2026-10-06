@@ -42,6 +42,8 @@ from app.devices.tools import (
     make_windows_keyboard_press_tool,
     make_windows_mouse_move_tool,
     make_windows_mouse_click_tool,
+    make_windows_clipboard_read_tool,
+    make_windows_clipboard_write_tool,
 )
 from app.devices.websocket import handle_device_websocket
 
@@ -115,6 +117,8 @@ for windows_tool in (
     make_windows_keyboard_press_tool(),
     make_windows_mouse_move_tool(),
     make_windows_mouse_click_tool(),
+    make_windows_clipboard_read_tool(),
+    make_windows_clipboard_write_tool(),
 ):
     tool_registry.register(windows_tool)
 

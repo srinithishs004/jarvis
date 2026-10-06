@@ -12,6 +12,8 @@ WINDOWS_TOOL_NAMES = frozenset(
         "windows.keyboard.press",
         "windows.mouse.move",
         "windows.mouse.click",
+        "windows.clipboard.read",
+        "windows.clipboard.write",
     }
 )
 
@@ -26,6 +28,8 @@ WINDOWS_CAPABILITY_NAMES = frozenset(
         "keyboard.press",
         "mouse.move",
         "mouse.click",
+        "clipboard.read",
+        "clipboard.write",
     }
 )
 

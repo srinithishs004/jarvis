@@ -53,6 +53,8 @@ def test_hello_contains_windows_registration():
             "keyboard.press",
             "mouse.move",
             "mouse.click",
+            "clipboard.read",
+            "clipboard.write",
         ],
         "tool_names": [
             "windows.system.info",
@@ -64,6 +66,8 @@ def test_hello_contains_windows_registration():
             "windows.keyboard.press",
             "windows.mouse.move",
             "windows.mouse.click",
+        "windows.clipboard.read",
+        "windows.clipboard.write",
         ],
     }
 
@@ -271,6 +275,8 @@ def test_hello_advertises_all_allowlisted_windows_tools():
         "keyboard.press",
         "mouse.move",
         "mouse.click",
+        "clipboard.read",
+        "clipboard.write",
     ]
 
     assert capabilities["tool_names"] == [
@@ -283,6 +289,8 @@ def test_hello_advertises_all_allowlisted_windows_tools():
         "windows.keyboard.press",
         "windows.mouse.move",
         "windows.mouse.click",
+        "windows.clipboard.read",
+        "windows.clipboard.write",
     ]
 
 
@@ -317,6 +325,14 @@ class InputOperations:
     def click_mouse(self, x, y, button):
         self.calls.append(("click_mouse", x, y, button))
         return {"x": x, "y": y, "button": button}
+
+    def read_clipboard(self):
+        self.calls.append(("read_clipboard",))
+        return {"text": "clipboard text"}
+
+    def write_clipboard(self, text):
+        self.calls.append(("write_clipboard", text))
+        return {"written": text}
 
 
 def test_keyboard_type_delegates_to_operations():
@@ -371,6 +387,32 @@ def test_mouse_click_delegates_to_operations():
     assert operations.calls == [("click_mouse", 100, 200, "left")]
 
 
+def test_clipboard_read_delegates_to_operations():
+    operations = InputOperations()
+    executor = CommandExecutor(operations=operations)
+
+    result = executor.execute(
+        "windows.clipboard.read",
+        {},
+    )
+
+    assert result == {"text": "clipboard text"}
+    assert operations.calls == [("read_clipboard",)]
+
+
+def test_clipboard_write_delegates_to_operations():
+    operations = InputOperations()
+    executor = CommandExecutor(operations=operations)
+
+    result = executor.execute(
+        "windows.clipboard.write",
+        {"text": "hello clipboard"},
+    )
+
+    assert result == {"written": "hello clipboard"}
+    assert operations.calls == [("write_clipboard", "hello clipboard")]
+
+
 @pytest.mark.parametrize(
     ("tool_name", "arguments"),
     [
@@ -391,6 +433,11 @@ def test_mouse_click_delegates_to_operations():
         ("windows.mouse.click", {"x": 0, "y": 0, "button": 123}),
         ("windows.mouse.click", {"x": 0, "y": 0, "button": "left", "extra": True}),
         ("windows.mouse.click", {"x": -1, "y": 0, "button": "left"}),
+        ("windows.clipboard.read", {"extra": True}),
+        ("windows.clipboard.write", {}),
+        ("windows.clipboard.write", {"text": ""}),
+        ("windows.clipboard.write", {"text": 123}),
+        ("windows.clipboard.write", {"text": "hello", "extra": True}),
     ],
 )
 def test_input_tools_reject_invalid_arguments(tool_name, arguments):

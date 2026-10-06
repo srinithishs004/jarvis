@@ -155,3 +155,29 @@ def make_windows_mouse_click_tool() -> ToolDefinition:
         },
         required=["device_id", "x", "y", "button"],
     )
+
+def make_windows_clipboard_read_tool() -> ToolDefinition:
+    return _windows_tool(
+        name="windows.clipboard.read",
+        description="Read text from the clipboard on a connected Windows JARVIS agent",
+        permission=PermissionLevel.L1,
+        timeout_seconds=15.0,
+        properties={
+            "device_id": {"type": "string"},
+        },
+        required=["device_id"],
+    )
+
+
+def make_windows_clipboard_write_tool() -> ToolDefinition:
+    return _windows_tool(
+        name="windows.clipboard.write",
+        description="Write text to the clipboard on a connected Windows JARVIS agent",
+        permission=PermissionLevel.L1,
+        timeout_seconds=15.0,
+        properties={
+            "device_id": {"type": "string"},
+            "text": {"type": "string"},
+        },
+        required=["device_id", "text"],
+    )

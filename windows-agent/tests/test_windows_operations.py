@@ -56,3 +56,17 @@ def test_window_id_rejects_invalid_values(window_id):
 )
 def test_window_id_accepts_positive_decimal_values(window_id, expected):
     assert NativeWindowsOperations._parse_window_id(window_id) == expected
+
+@pytest.mark.parametrize("value", [None, 123, b"text", True])
+def test_clipboard_write_rejects_non_string_values(value):
+    operation = object.__new__(NativeWindowsOperations)
+
+    with pytest.raises(ValueError, match="text must be a string"):
+        operation.write_clipboard(value)
+
+
+def test_clipboard_write_rejects_empty_text():
+    operation = object.__new__(NativeWindowsOperations)
+
+    with pytest.raises(ValueError, match="text must not be empty"):
+        operation.write_clipboard("")

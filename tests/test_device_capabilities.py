@@ -18,6 +18,8 @@ def test_windows_tool_allowlist_contains_registered_windows_tools():
         "windows.keyboard.press",
         "windows.mouse.move",
         "windows.mouse.click",
+        "windows.clipboard.read",
+        "windows.clipboard.write",
     }
 
 
@@ -32,6 +34,8 @@ def test_windows_capability_allowlist_contains_expected_capabilities():
         "keyboard.press",
         "mouse.move",
         "mouse.click",
+        "clipboard.read",
+        "clipboard.write",
     }
 
 

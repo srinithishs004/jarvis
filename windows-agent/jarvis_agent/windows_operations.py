@@ -102,8 +102,6 @@ class NativeWindowsOperations:
 
     def list_applications(self) -> list[dict[str, Any]]:
         import ctypes
-        from ctypes import wintypes
-
         user32 = ctypes.windll.user32
 
         windows: list[dict[str, Any]] = []
@@ -453,3 +451,96 @@ class NativeWindowsOperations:
             )
 
         return hwnd
+
+
+    def read_clipboard(self) -> dict[str, Any]:
+        import ctypes
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+
+        CF_UNICODETEXT = 13
+
+        if not user32.OpenClipboard(None):
+            raise OSError("OpenClipboard failed")
+
+        try:
+            handle = user32.GetClipboardData(CF_UNICODETEXT)
+            if not handle:
+                raise ValueError("Clipboard does not contain text")
+
+            kernel32.GlobalLock.restype = ctypes.c_void_p
+            pointer = kernel32.GlobalLock(handle)
+            if not pointer:
+                raise OSError("GlobalLock failed")
+
+            try:
+                text = ctypes.wstring_at(pointer)
+            finally:
+                kernel32.GlobalUnlock(handle)
+
+            return {
+                "text": text,
+            }
+        finally:
+            user32.CloseClipboard()
+
+    def write_clipboard(self, text: str) -> dict[str, Any]:
+        if not isinstance(text, str):
+            raise ValueError("text must be a string")
+
+        if not text:
+            raise ValueError("text must not be empty")
+
+        import ctypes
+
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+
+        CF_UNICODETEXT = 13
+        GMEM_MOVEABLE = 0x0002
+        GMEM_ZEROINIT = 0x0040
+
+        encoded = ctypes.create_unicode_buffer(text)
+        size = ctypes.sizeof(encoded)
+
+        if not user32.OpenClipboard(None):
+            raise OSError("OpenClipboard failed")
+
+        handle = None
+
+        try:
+            if not user32.EmptyClipboard():
+                raise OSError("EmptyClipboard failed")
+
+            handle = kernel32.GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, size)
+            if not handle:
+                raise MemoryError("GlobalAlloc failed")
+
+            kernel32.GlobalLock.restype = ctypes.c_void_p
+            pointer = kernel32.GlobalLock(handle)
+            if not pointer:
+                kernel32.GlobalFree(handle)
+                handle = None
+                raise OSError("GlobalLock failed")
+
+            try:
+                ctypes.memmove(pointer, encoded, size)
+            finally:
+                kernel32.GlobalUnlock(handle)
+
+            if not user32.SetClipboardData(CF_UNICODETEXT, handle):
+                kernel32.GlobalFree(handle)
+                handle = None
+                raise OSError("SetClipboardData failed")
+
+            # Ownership transfers to the clipboard after SetClipboardData.
+            handle = None
+
+            return {
+                "written": text,
+                "characters": len(text),
+            }
+        finally:
+            user32.CloseClipboard()
+            if handle:
+                kernel32.GlobalFree(handle)
