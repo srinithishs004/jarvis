@@ -14,6 +14,10 @@ def test_windows_tool_allowlist_contains_registered_windows_tools():
         "windows.app.launch",
         "windows.app.close",
         "windows.window.focus",
+        "windows.keyboard.type",
+        "windows.keyboard.press",
+        "windows.mouse.move",
+        "windows.mouse.click",
     }
 
 
@@ -24,6 +28,10 @@ def test_windows_capability_allowlist_contains_expected_capabilities():
         "app.launch",
         "app.close",
         "window.focus",
+        "keyboard.type",
+        "keyboard.press",
+        "mouse.move",
+        "mouse.click",
     }
 
 

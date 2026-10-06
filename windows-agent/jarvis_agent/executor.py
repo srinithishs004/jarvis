@@ -18,6 +18,18 @@ class WindowsOperations(Protocol):
     def focus_window(self, window_id: str) -> Any:
         ...
 
+    def type_text(self, text: str) -> Any:
+        ...
+
+    def press_key(self, key: str) -> Any:
+        ...
+
+    def move_mouse(self, x: int, y: int) -> Any:
+        ...
+
+    def click_mouse(self, x: int, y: int, button: str) -> Any:
+        ...
+
 
 class CommandExecutor:
     """Execute the small, explicitly allowlisted set of agent tools."""
@@ -34,6 +46,10 @@ class CommandExecutor:
             "windows.app.launch": self._app_launch,
             "windows.app.close": self._app_close,
             "windows.window.focus": self._window_focus,
+            "windows.keyboard.type": self._keyboard_type,
+            "windows.keyboard.press": self._keyboard_press,
+            "windows.mouse.move": self._mouse_move,
+            "windows.mouse.click": self._mouse_click,
         }
 
     def execute(
@@ -121,6 +137,88 @@ class CommandExecutor:
 
         return self._operations.focus_window(arguments["window_id"])
 
+    def _keyboard_type(self, arguments: dict[str, Any]) -> Any:
+        self._require_string_argument(
+            arguments,
+            tool_name="windows.keyboard.type",
+            argument_name="text",
+        )
+        if set(arguments) != {"text"}:
+            raise ValueError(
+                "Invalid arguments: windows.keyboard.type expects only 'text'"
+            )
+        return self._operations.type_text(arguments["text"])
+
+    def _keyboard_press(self, arguments: dict[str, Any]) -> Any:
+        self._require_string_argument(
+            arguments,
+            tool_name="windows.keyboard.press",
+            argument_name="key",
+        )
+        if set(arguments) != {"key"}:
+            raise ValueError(
+                "Invalid arguments: windows.keyboard.press expects only 'key'"
+            )
+        return self._operations.press_key(arguments["key"])
+
+    def _mouse_move(self, arguments: dict[str, Any]) -> Any:
+        self._require_coordinate_arguments(
+            arguments,
+            tool_name="windows.mouse.move",
+        )
+        if set(arguments) != {"x", "y"}:
+            raise ValueError(
+                "Invalid arguments: windows.mouse.move expects only 'x' and 'y'"
+            )
+        return self._operations.move_mouse(
+            arguments["x"],
+            arguments["y"],
+        )
+
+    def _mouse_click(self, arguments: dict[str, Any]) -> Any:
+        self._require_coordinate_arguments(
+            arguments,
+            tool_name="windows.mouse.click",
+        )
+        self._require_string_argument(
+            arguments,
+            tool_name="windows.mouse.click",
+            argument_name="button",
+        )
+        if set(arguments) != {"x", "y", "button"}:
+            raise ValueError(
+                "Invalid arguments: windows.mouse.click expects only "
+                "'x', 'y', and 'button'"
+            )
+        return self._operations.click_mouse(
+            arguments["x"],
+            arguments["y"],
+            arguments["button"],
+        )
+
+    @staticmethod
+    def _require_coordinate_arguments(
+        arguments: dict[str, Any],
+        *,
+        tool_name: str,
+    ) -> None:
+        for argument_name in ("x", "y"):
+            if argument_name not in arguments:
+                raise ValueError(
+                    f"Invalid arguments: {tool_name} requires '{argument_name}'"
+                )
+            value = arguments[argument_name]
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise ValueError(
+                    f"Invalid arguments: {tool_name} '{argument_name}' "
+                    "must be an integer"
+                )
+            if value < 0:
+                raise ValueError(
+                    f"Invalid arguments: {tool_name} '{argument_name}' "
+                    "must be non-negative"
+                )
+
     @staticmethod
     def _require_string_argument(
         arguments: dict[str, Any],
@@ -160,3 +258,15 @@ class _DefaultWindowsOperations:
 
     def focus_window(self, window_id: str) -> Any:
         raise RuntimeError("Windows window operations are unavailable")
+
+    def type_text(self, text: str) -> Any:
+        raise RuntimeError("Windows keyboard operations are unavailable")
+
+    def press_key(self, key: str) -> Any:
+        raise RuntimeError("Windows keyboard operations are unavailable")
+
+    def move_mouse(self, x: int, y: int) -> Any:
+        raise RuntimeError("Windows mouse operations are unavailable")
+
+    def click_mouse(self, x: int, y: int, button: str) -> Any:
+        raise RuntimeError("Windows mouse operations are unavailable")

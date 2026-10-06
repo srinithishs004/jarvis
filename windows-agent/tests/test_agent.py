@@ -42,9 +42,30 @@ def test_hello_contains_windows_registration():
     assert message["token"] == "token"
     assert message["registration"]["device_id"] == "pc-01"
     assert message["registration"]["device_type"] == "windows"
-    assert "windows.system.info" in (
-        message["registration"]["capabilities"]["tool_names"]
-    )
+    assert message["registration"]["capabilities"] == {
+        "capabilities": [
+            "system.info",
+            "app.list",
+            "app.launch",
+            "app.close",
+            "window.focus",
+            "keyboard.type",
+            "keyboard.press",
+            "mouse.move",
+            "mouse.click",
+        ],
+        "tool_names": [
+            "windows.system.info",
+            "windows.app.list",
+            "windows.app.launch",
+            "windows.app.close",
+            "windows.window.focus",
+            "windows.keyboard.type",
+            "windows.keyboard.press",
+            "windows.mouse.move",
+            "windows.mouse.click",
+        ],
+    }
 
 
 def test_heartbeat_contains_device_id():
@@ -246,6 +267,10 @@ def test_hello_advertises_all_allowlisted_windows_tools():
         "app.launch",
         "app.close",
         "window.focus",
+        "keyboard.type",
+        "keyboard.press",
+        "mouse.move",
+        "mouse.click",
     ]
 
     assert capabilities["tool_names"] == [
@@ -254,4 +279,122 @@ def test_hello_advertises_all_allowlisted_windows_tools():
         "windows.app.launch",
         "windows.app.close",
         "windows.window.focus",
+        "windows.keyboard.type",
+        "windows.keyboard.press",
+        "windows.mouse.move",
+        "windows.mouse.click",
     ]
+
+
+class InputOperations:
+    def __init__(self):
+        self.calls = []
+
+    def list_applications(self):
+        return []
+
+    def launch_application(self, application):
+        return {"application": application}
+
+    def close_window(self, window_id):
+        return {"window_id": window_id}
+
+    def focus_window(self, window_id):
+        return {"window_id": window_id}
+
+    def type_text(self, text):
+        self.calls.append(("type_text", text))
+        return {"typed": text}
+
+    def press_key(self, key):
+        self.calls.append(("press_key", key))
+        return {"pressed": key}
+
+    def move_mouse(self, x, y):
+        self.calls.append(("move_mouse", x, y))
+        return {"x": x, "y": y}
+
+    def click_mouse(self, x, y, button):
+        self.calls.append(("click_mouse", x, y, button))
+        return {"x": x, "y": y, "button": button}
+
+
+def test_keyboard_type_delegates_to_operations():
+    operations = InputOperations()
+    executor = CommandExecutor(operations=operations)
+
+    result = executor.execute(
+        "windows.keyboard.type",
+        {"text": "hello"},
+    )
+
+    assert result == {"typed": "hello"}
+    assert operations.calls == [("type_text", "hello")]
+
+
+def test_keyboard_press_delegates_to_operations():
+    operations = InputOperations()
+    executor = CommandExecutor(operations=operations)
+
+    result = executor.execute(
+        "windows.keyboard.press",
+        {"key": "ENTER"},
+    )
+
+    assert result == {"pressed": "ENTER"}
+    assert operations.calls == [("press_key", "ENTER")]
+
+
+def test_mouse_move_delegates_to_operations():
+    operations = InputOperations()
+    executor = CommandExecutor(operations=operations)
+
+    result = executor.execute(
+        "windows.mouse.move",
+        {"x": 100, "y": 200},
+    )
+
+    assert result == {"x": 100, "y": 200}
+    assert operations.calls == [("move_mouse", 100, 200)]
+
+
+def test_mouse_click_delegates_to_operations():
+    operations = InputOperations()
+    executor = CommandExecutor(operations=operations)
+
+    result = executor.execute(
+        "windows.mouse.click",
+        {"x": 100, "y": 200, "button": "left"},
+    )
+
+    assert result == {"x": 100, "y": 200, "button": "left"}
+    assert operations.calls == [("click_mouse", 100, 200, "left")]
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "arguments"),
+    [
+        ("windows.keyboard.type", {}),
+        ("windows.keyboard.type", {"text": ""}),
+        ("windows.keyboard.type", {"text": 123}),
+        ("windows.keyboard.type", {"text": "hello", "extra": True}),
+        ("windows.keyboard.press", {}),
+        ("windows.keyboard.press", {"key": ""}),
+        ("windows.keyboard.press", {"key": 123}),
+        ("windows.keyboard.press", {"key": "ENTER", "extra": True}),
+        ("windows.mouse.move", {"x": -1, "y": 0}),
+        ("windows.mouse.move", {"x": 0, "y": -1}),
+        ("windows.mouse.move", {"x": "10", "y": 20}),
+        ("windows.mouse.move", {"x": True, "y": 20}),
+        ("windows.mouse.move", {"x": 10}),
+        ("windows.mouse.click", {"x": 0, "y": 0, "button": ""}),
+        ("windows.mouse.click", {"x": 0, "y": 0, "button": 123}),
+        ("windows.mouse.click", {"x": 0, "y": 0, "button": "left", "extra": True}),
+        ("windows.mouse.click", {"x": -1, "y": 0, "button": "left"}),
+    ],
+)
+def test_input_tools_reject_invalid_arguments(tool_name, arguments):
+    executor = CommandExecutor(operations=InputOperations())
+
+    with pytest.raises(ValueError):
+        executor.execute(tool_name, arguments)

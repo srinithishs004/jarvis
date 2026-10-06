@@ -93,3 +93,65 @@ def make_windows_window_focus_tool() -> ToolDefinition:
         },
         required=["device_id", "window_id"],
     )
+
+
+def make_windows_keyboard_type_tool() -> ToolDefinition:
+    return _windows_tool(
+        name="windows.keyboard.type",
+        description="Type text into the currently focused window on a connected Windows JARVIS agent",
+        permission=PermissionLevel.L1,
+        timeout_seconds=15.0,
+        properties={
+            "device_id": {"type": "string"},
+            "text": {"type": "string"},
+        },
+        required=["device_id", "text"],
+    )
+
+
+def make_windows_keyboard_press_tool() -> ToolDefinition:
+    return _windows_tool(
+        name="windows.keyboard.press",
+        description="Press an explicitly allowlisted keyboard key on a connected Windows JARVIS agent",
+        permission=PermissionLevel.L1,
+        timeout_seconds=15.0,
+        properties={
+            "device_id": {"type": "string"},
+            "key": {"type": "string"},
+        },
+        required=["device_id", "key"],
+    )
+
+
+def make_windows_mouse_move_tool() -> ToolDefinition:
+    return _windows_tool(
+        name="windows.mouse.move",
+        description="Move the mouse cursor to screen coordinates on a connected Windows JARVIS agent",
+        permission=PermissionLevel.L1,
+        timeout_seconds=15.0,
+        properties={
+            "device_id": {"type": "string"},
+            "x": {"type": "integer", "minimum": 0},
+            "y": {"type": "integer", "minimum": 0},
+        },
+        required=["device_id", "x", "y"],
+    )
+
+
+def make_windows_mouse_click_tool() -> ToolDefinition:
+    return _windows_tool(
+        name="windows.mouse.click",
+        description="Click an explicitly supported mouse button at screen coordinates on a connected Windows JARVIS agent",
+        permission=PermissionLevel.L1,
+        timeout_seconds=15.0,
+        properties={
+            "device_id": {"type": "string"},
+            "x": {"type": "integer", "minimum": 0},
+            "y": {"type": "integer", "minimum": 0},
+            "button": {
+                "type": "string",
+                "enum": ["left", "right", "middle"],
+            },
+        },
+        required=["device_id", "x", "y", "button"],
+    )

@@ -38,6 +38,10 @@ from app.devices.tools import (
     make_windows_app_list_tool,
     make_windows_system_info_tool,
     make_windows_window_focus_tool,
+    make_windows_keyboard_type_tool,
+    make_windows_keyboard_press_tool,
+    make_windows_mouse_move_tool,
+    make_windows_mouse_click_tool,
 )
 from app.devices.websocket import handle_device_websocket
 
@@ -107,6 +111,10 @@ for windows_tool in (
     make_windows_app_launch_tool(),
     make_windows_app_close_tool(),
     make_windows_window_focus_tool(),
+    make_windows_keyboard_type_tool(),
+    make_windows_keyboard_press_tool(),
+    make_windows_mouse_move_tool(),
+    make_windows_mouse_click_tool(),
 ):
     tool_registry.register(windows_tool)
 

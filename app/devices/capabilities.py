@@ -8,6 +8,10 @@ WINDOWS_TOOL_NAMES = frozenset(
         "windows.app.launch",
         "windows.app.close",
         "windows.window.focus",
+        "windows.keyboard.type",
+        "windows.keyboard.press",
+        "windows.mouse.move",
+        "windows.mouse.click",
     }
 )
 
@@ -18,6 +22,10 @@ WINDOWS_CAPABILITY_NAMES = frozenset(
         "app.launch",
         "app.close",
         "window.focus",
+        "keyboard.type",
+        "keyboard.press",
+        "mouse.move",
+        "mouse.click",
     }
 )
 
