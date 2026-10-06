@@ -11,14 +11,24 @@ The agent supports these explicitly allowlisted tools:
 - `windows.app.launch` — launch an explicitly allowlisted application
 - `windows.app.close` — request that a specific window close
 - `windows.window.focus` — focus a specific window
+- `windows.keyboard.type` — type text through the Windows input layer
+- `windows.keyboard.press` — press an explicitly allowlisted key
+- `windows.mouse.move` — move the mouse cursor
+- `windows.mouse.click` — click an explicitly allowlisted mouse button
+- `windows.clipboard.read` — read text from the Windows clipboard
+- `windows.clipboard.write` — write text to the Windows clipboard
 
-The agent rejects unknown tool names.
+The agent rejects unknown tool names and only executes tools from its explicit
+allowlist.
 
 Application launching uses an explicit application allowlist and does not
 invoke a shell, PowerShell, or arbitrary command execution.
 
-The agent does not provide arbitrary shell, PowerShell, keyboard, mouse,
-filesystem, or unrestricted process execution.
+Keyboard input uses an explicit key allowlist. Mouse input uses explicit
+coordinate and button validation. Clipboard controls are text-only.
+
+The agent does not provide arbitrary shell, PowerShell, filesystem, or
+unrestricted process execution.
 
 ## Configuration
 
