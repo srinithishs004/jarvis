@@ -2,6 +2,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
 from app.devices.auth import DeviceAuthenticator
+from app.devices.capabilities import sanitize_device_capabilities
 from app.devices.connection import DeviceConnectionManager
 from app.devices.commands import DeviceCommandService
 from app.models.device_protocol import (
@@ -59,7 +60,14 @@ async def handle_device_websocket(
             )
             await websocket.close(code=1008)
             return
-        registration = hello.registration
+        registration = hello.registration.model_copy(
+            update={
+                "capabilities": sanitize_device_capabilities(
+                    hello.registration.device_type,
+                    hello.registration.capabilities,
+                )
+            }
+        )
         device_id = registration.device_id
 
         token = raw.get("token")
@@ -172,7 +180,10 @@ async def handle_device_websocket(
 
                 connection_manager.registry.update_capabilities(
                     device_id,
-                    message.capabilities,
+                    sanitize_device_capabilities(
+                        connection_manager.registry.get(device_id).device_type,
+                        message.capabilities,
+                    ),
                 )
 
                 await websocket.send_json(

@@ -32,7 +32,13 @@ from app.devices.connection import DeviceConnectionManager
 from app.devices.commands import DeviceCommandService
 from app.devices.monitor import DeviceLifecycleMonitor
 from app.core.remote_executor import RemoteToolExecutor
-from app.devices.tools import make_windows_system_info_tool
+from app.devices.tools import (
+    make_windows_app_close_tool,
+    make_windows_app_launch_tool,
+    make_windows_app_list_tool,
+    make_windows_system_info_tool,
+    make_windows_window_focus_tool,
+)
 from app.devices.websocket import handle_device_websocket
 
 load_dotenv("/opt/jarvis/.env")
@@ -95,9 +101,14 @@ tool_router = ToolRouter(
     remote_executor=remote_tool_executor,
 )
 
-tool_registry.register(
-    make_windows_system_info_tool()
-)
+for windows_tool in (
+    make_windows_system_info_tool(),
+    make_windows_app_list_tool(),
+    make_windows_app_launch_tool(),
+    make_windows_app_close_tool(),
+    make_windows_window_focus_tool(),
+):
+    tool_registry.register(windows_tool)
 
 model_router = create_model_router()
 

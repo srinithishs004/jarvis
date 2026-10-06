@@ -122,3 +122,171 @@ def test_client_rejects_malformed_command():
     )
 
     assert websocket.sent == []
+
+
+class FakeOperations:
+    def list_applications(self):
+        return [{"window_id": "win-1", "title": "Notepad"}]
+
+    def launch_application(self, application):
+        return {"application": application, "launched": True}
+
+    def close_window(self, window_id):
+        return {"window_id": window_id, "closed": True}
+
+    def focus_window(self, window_id):
+        return {"window_id": window_id, "focused": True}
+
+
+def make_client_with_fake_operations():
+    config = AgentConfig(
+        server_url="ws://localhost:8000/ws/devices",
+        device_id="windows-test",
+        device_name="Test PC",
+        auth_secret="test-secret",
+        heartbeat_interval_seconds=999,
+    )
+
+    return JarvisAgentClient(
+        config,
+        CommandExecutor(operations=FakeOperations()),
+    )
+
+
+def test_client_executes_app_list_command():
+    client = make_client_with_fake_operations()
+    websocket = FakeWebSocket([])
+
+    asyncio.run(
+        client._handle_message(
+            websocket,
+            json.dumps({
+                "type": "command",
+                "request_id": "req-list",
+                "tool_name": "windows.app.list",
+                "arguments": {},
+            }),
+        )
+    )
+
+    assert websocket.sent == [{
+        "type": "command_result",
+        "request_id": "req-list",
+        "success": True,
+        "result": [{"window_id": "win-1", "title": "Notepad"}],
+        "error": None,
+    }]
+
+
+def test_client_executes_app_launch_command():
+    client = make_client_with_fake_operations()
+    websocket = FakeWebSocket([])
+
+    asyncio.run(
+        client._handle_message(
+            websocket,
+            json.dumps({
+                "type": "command",
+                "request_id": "req-launch",
+                "tool_name": "windows.app.launch",
+                "arguments": {"application": "notepad.exe"},
+            }),
+        )
+    )
+
+    assert websocket.sent[0]["success"] is True
+    assert websocket.sent[0]["request_id"] == "req-launch"
+    assert websocket.sent[0]["result"] == {
+        "application": "notepad.exe",
+        "launched": True,
+    }
+
+
+def test_client_executes_app_close_command():
+    client = make_client_with_fake_operations()
+    websocket = FakeWebSocket([])
+
+    asyncio.run(
+        client._handle_message(
+            websocket,
+            json.dumps({
+                "type": "command",
+                "request_id": "req-close",
+                "tool_name": "windows.app.close",
+                "arguments": {"window_id": "win-1"},
+            }),
+        )
+    )
+
+    assert websocket.sent[0]["success"] is True
+    assert websocket.sent[0]["request_id"] == "req-close"
+    assert websocket.sent[0]["result"] == {
+        "window_id": "win-1",
+        "closed": True,
+    }
+
+
+def test_client_executes_window_focus_command():
+    client = make_client_with_fake_operations()
+    websocket = FakeWebSocket([])
+
+    asyncio.run(
+        client._handle_message(
+            websocket,
+            json.dumps({
+                "type": "command",
+                "request_id": "req-focus",
+                "tool_name": "windows.window.focus",
+                "arguments": {"window_id": "win-1"},
+            }),
+        )
+    )
+
+    assert websocket.sent[0]["success"] is True
+    assert websocket.sent[0]["request_id"] == "req-focus"
+    assert websocket.sent[0]["result"] == {
+        "window_id": "win-1",
+        "focused": True,
+    }
+
+
+class FailingOperations:
+    def list_applications(self):
+        raise RuntimeError("Windows API failure")
+
+
+def test_client_returns_structured_error_for_operation_failure():
+    config = AgentConfig(
+        server_url="ws://localhost:8000/ws/devices",
+        device_id="windows-test",
+        device_name="Test PC",
+        auth_secret="test-secret",
+        heartbeat_interval_seconds=999,
+    )
+
+    client = JarvisAgentClient(
+        config,
+        CommandExecutor(operations=FailingOperations()),
+    )
+
+    websocket = FakeWebSocket([])
+
+    asyncio.run(
+        client._handle_message(
+            websocket,
+            json.dumps({
+                "type": "command",
+                "request_id": "req-fail",
+                "tool_name": "windows.app.list",
+                "arguments": {},
+            }),
+        )
+    )
+
+    assert websocket.sent == [{
+        "type": "command_result",
+        "request_id": "req-fail",
+        "success": False,
+        "result": None,
+        "error": "Windows API failure",
+    }]

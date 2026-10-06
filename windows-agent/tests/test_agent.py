@@ -118,3 +118,140 @@ def test_config_requires_secrets(monkeypatch):
 
     with pytest.raises(ValueError, match="Missing required"):
         AgentConfig.from_environment()
+
+
+class FakeWindowsOperations:
+    def __init__(self):
+        self.calls = []
+
+    def list_applications(self):
+        self.calls.append(("list_applications",))
+        return [{"window_id": "win-1", "title": "Notepad"}]
+
+    def launch_application(self, application):
+        self.calls.append(("launch_application", application))
+        return {"application": application, "launched": True}
+
+    def close_window(self, window_id):
+        self.calls.append(("close_window", window_id))
+        return {"window_id": window_id, "closed": True}
+
+    def focus_window(self, window_id):
+        self.calls.append(("focus_window", window_id))
+        return {"window_id": window_id, "focused": True}
+
+
+def test_executor_allows_app_list():
+    operations = FakeWindowsOperations()
+    executor = CommandExecutor(operations=operations)
+
+    result = executor.execute("windows.app.list", {})
+
+    assert result == [{"window_id": "win-1", "title": "Notepad"}]
+    assert operations.calls == [("list_applications",)]
+
+
+def test_executor_allows_app_launch():
+    operations = FakeWindowsOperations()
+    executor = CommandExecutor(operations=operations)
+
+    result = executor.execute(
+        "windows.app.launch",
+        {"application": "notepad.exe"},
+    )
+
+    assert result == {
+        "application": "notepad.exe",
+        "launched": True,
+    }
+    assert operations.calls == [
+        ("launch_application", "notepad.exe"),
+    ]
+
+
+def test_executor_allows_app_close():
+    operations = FakeWindowsOperations()
+    executor = CommandExecutor(operations=operations)
+
+    result = executor.execute(
+        "windows.app.close",
+        {"window_id": "win-1"},
+    )
+
+    assert result == {
+        "window_id": "win-1",
+        "closed": True,
+    }
+    assert operations.calls == [
+        ("close_window", "win-1"),
+    ]
+
+
+def test_executor_allows_window_focus():
+    operations = FakeWindowsOperations()
+    executor = CommandExecutor(operations=operations)
+
+    result = executor.execute(
+        "windows.window.focus",
+        {"window_id": "win-1"},
+    )
+
+    assert result == {
+        "window_id": "win-1",
+        "focused": True,
+    }
+    assert operations.calls == [
+        ("focus_window", "win-1"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "arguments"),
+    [
+        ("windows.app.list", {"unexpected": True}),
+        ("windows.app.launch", {}),
+        ("windows.app.launch", {"application": 123}),
+        ("windows.app.launch", {"application": "notepad.exe", "extra": True}),
+        ("windows.app.close", {}),
+        ("windows.app.close", {"window_id": 123}),
+        ("windows.app.close", {"window_id": "win-1", "extra": True}),
+        ("windows.window.focus", {}),
+        ("windows.window.focus", {"window_id": 123}),
+        ("windows.window.focus", {"window_id": "win-1", "extra": True}),
+    ],
+)
+def test_executor_rejects_invalid_tool_arguments(
+    tool_name,
+    arguments,
+):
+    executor = CommandExecutor(operations=FakeWindowsOperations())
+
+    with pytest.raises(ValueError, match="Invalid arguments"):
+        executor.execute(tool_name, arguments)
+
+
+def test_hello_advertises_all_allowlisted_windows_tools():
+    message = make_hello(
+        device_id="pc-01",
+        device_name="My PC",
+        agent_version="0.1.0",
+        token="token",
+    )
+
+    capabilities = message["registration"]["capabilities"]
+
+    assert capabilities["capabilities"] == [
+        "system.info",
+        "app.list",
+        "app.launch",
+        "app.close",
+        "window.focus",
+    ]
+
+    assert capabilities["tool_names"] == [
+        "windows.system.info",
+        "windows.app.list",
+        "windows.app.launch",
+        "windows.app.close",
+        "windows.window.focus",
+    ]

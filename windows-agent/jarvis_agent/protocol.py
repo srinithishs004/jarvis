@@ -18,10 +18,18 @@ def make_hello(
             "agent_version": agent_version,
             "capabilities": {
                 "capabilities": [
-                    "windows.system.info",
+                    "system.info",
+                    "app.list",
+                    "app.launch",
+                    "app.close",
+                    "window.focus",
                 ],
                 "tool_names": [
                     "windows.system.info",
+                    "windows.app.list",
+                    "windows.app.launch",
+                    "windows.app.close",
+                    "windows.window.focus",
                 ],
             },
         },

@@ -245,10 +245,8 @@ def test_capabilities_update_succeeds():
         "request_type": "capabilities",
     }
     device = manager.registry.get("windows-01")
-    assert device.capabilities.tool_names == [
-        "windows.keyboard",
-        "windows.mouse",
-    ]
+    assert device.capabilities.capabilities == []
+    assert device.capabilities.tool_names == []
 
 
 def test_malformed_heartbeat_returns_error_and_connection_continues():
@@ -389,3 +387,29 @@ def test_malformed_hello_returns_error_and_closes_connection():
     assert websocket.sent[0]["type"] == "error"
     assert websocket.sent[0]["code"] == "invalid_message"
     assert websocket.sent[0]["message"] == "Invalid hello message"
+
+
+def test_hello_filters_unknown_device_capabilities():
+    auth = DeviceAuthenticator("test-secret")
+    manager = make_manager()
+
+    websocket = FakeWebSocket([
+        hello(auth),
+        RuntimeError("stop"),
+    ])
+
+    try:
+        asyncio.run(
+            handle_device_websocket(
+                websocket,
+                connection_manager=manager,
+                authenticator=auth,
+            )
+        )
+    except RuntimeError:
+        pass
+
+    device = manager.registry.get("windows-01")
+
+    assert device.capabilities.capabilities == []
+    assert device.capabilities.tool_names == []

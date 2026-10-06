@@ -2,14 +2,23 @@
 
 Minimal Windows device agent for JARVIS OS.
 
-## Current capability
+## Current capabilities
 
-The agent currently supports only:
+The agent supports these explicitly allowlisted tools:
 
-- `windows.system.info`
+- `windows.system.info` — read basic Windows system information
+- `windows.app.list` — list visible top-level application windows
+- `windows.app.launch` — launch an explicitly allowlisted application
+- `windows.app.close` — request that a specific window close
+- `windows.window.focus` — focus a specific window
 
-The agent rejects unknown tool names and does not provide arbitrary
-shell, PowerShell, keyboard, mouse, filesystem, or process execution.
+The agent rejects unknown tool names.
+
+Application launching uses an explicit application allowlist and does not
+invoke a shell, PowerShell, or arbitrary command execution.
+
+The agent does not provide arbitrary shell, PowerShell, keyboard, mouse,
+filesystem, or unrestricted process execution.
 
 ## Configuration
 
