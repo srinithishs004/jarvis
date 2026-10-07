@@ -17,6 +17,9 @@ The agent supports these explicitly allowlisted tools:
 - `windows.mouse.click` — click an explicitly allowlisted mouse button
 - `windows.clipboard.read` — read text from the Windows clipboard
 - `windows.clipboard.write` — write text to the Windows clipboard
+- `windows.filesystem.read` — read a UTF-8 text file within the configured filesystem root
+- `windows.filesystem.list` — list entries within the configured filesystem root
+- `windows.filesystem.write` — write a UTF-8 text file within the configured filesystem root
 
 The agent rejects unknown tool names and only executes tools from its explicit
 allowlist.
@@ -26,9 +29,12 @@ invoke a shell, PowerShell, or arbitrary command execution.
 
 Keyboard input uses an explicit key allowlist. Mouse input uses explicit
 coordinate and button validation. Clipboard controls are text-only.
+Filesystem controls are restricted to the configured filesystem root and
+reject absolute paths, parent traversal,
+symlinks, and junctions.
 
-The agent does not provide arbitrary shell, PowerShell, filesystem, or
-unrestricted process execution.
+The agent does not provide arbitrary shell, PowerShell, or unrestricted
+process execution.
 
 ## Configuration
 
@@ -38,9 +44,13 @@ Set these environment variables:
 - `JARVIS_DEVICE_ID`
 - `JARVIS_DEVICE_NAME`
 - `JARVIS_DEVICE_AUTH_SECRET`
+- `JARVIS_FILESYSTEM_ROOT`
 
 The authentication secret must match the JARVIS server's
 `JARVIS_DEVICE_AUTH_SECRET`.
+
+`JARVIS_FILESYSTEM_ROOT` must point to an existing directory. Filesystem
+operations are confined to this directory.
 
 ## Run
 
@@ -53,5 +63,6 @@ $env:JARVIS_SERVER_URL="wss://your-server/ws/devices"
 $env:JARVIS_DEVICE_ID="windows-01"
 $env:JARVIS_DEVICE_NAME="My Windows PC"
 $env:JARVIS_DEVICE_AUTH_SECRET="your-secret"
+$env:JARVIS_FILESYSTEM_ROOT="C:\\Users\\MyUser\\Documents"
 
 python -m jarvis_agent
