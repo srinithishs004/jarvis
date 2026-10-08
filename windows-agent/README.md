@@ -8,6 +8,7 @@ The agent supports these explicitly allowlisted tools:
 
 - `windows.system.info` — read basic Windows system information
 - `windows.app.list` — list visible top-level application windows
+- `windows.screen.capture` — capture the current Windows screen as BGRA pixel data
 - `windows.app.launch` — launch an explicitly allowlisted application
 - `windows.app.close` — request that a specific window close
 - `windows.window.focus` — focus a specific window
