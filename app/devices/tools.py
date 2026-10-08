@@ -53,6 +53,19 @@ def make_windows_app_list_tool() -> ToolDefinition:
     )
 
 
+def make_windows_screen_capture_tool() -> ToolDefinition:
+    return _windows_tool(
+        name="windows.screen.capture",
+        description="Capture the current screen from a connected Windows JARVIS agent",
+        permission=PermissionLevel.L1,
+        timeout_seconds=15.0,
+        properties={
+            "device_id": {"type": "string"},
+        },
+        required=["device_id"],
+    )
+
+
 def make_windows_app_launch_tool() -> ToolDefinition:
     return _windows_tool(
         name="windows.app.launch",

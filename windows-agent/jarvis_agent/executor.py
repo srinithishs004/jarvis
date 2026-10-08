@@ -9,6 +9,9 @@ class WindowsOperations(Protocol):
     def list_applications(self) -> Any:
         ...
 
+    def capture_screen(self) -> Any:
+        ...
+
     def launch_application(self, application: str) -> Any:
         ...
 
@@ -58,6 +61,7 @@ class CommandExecutor:
         self._handlers: dict[str, Callable[[dict[str, Any]], Any]] = {
             "windows.system.info": self._system_info,
             "windows.app.list": self._app_list,
+            "windows.screen.capture": self._screen_capture,
             "windows.app.launch": self._app_launch,
             "windows.app.close": self._app_close,
             "windows.window.focus": self._window_focus,
@@ -103,6 +107,14 @@ class CommandExecutor:
             "machine": platform.machine(),
             "processor": platform.processor(),
         }
+
+    def _screen_capture(self, arguments: dict[str, Any]) -> Any:
+        if arguments:
+            raise ValueError(
+                "Invalid arguments: windows.screen.capture does not accept arguments"
+            )
+
+        return self._operations.capture_screen()
 
     def _app_list(self, arguments: dict[str, Any]) -> Any:
         if arguments:
@@ -341,6 +353,9 @@ class CommandExecutor:
 
 class _DefaultWindowsOperations:
     """Placeholder backend until the native Windows implementation exists."""
+
+    def capture_screen(self) -> Any:
+        raise RuntimeError("Windows screen capture operations are unavailable")
 
     def list_applications(self) -> Any:
         raise RuntimeError("Windows application operations are unavailable")

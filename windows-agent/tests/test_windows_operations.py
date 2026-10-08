@@ -1,3 +1,4 @@
+import ctypes
 import sys
 from pathlib import Path
 
@@ -14,6 +15,76 @@ def test_native_operations_requires_windows():
 
     with pytest.raises(RuntimeError, match="requires Windows"):
         NativeWindowsOperations(".")
+
+
+def test_capture_screen_is_defined_as_native_operation():
+    operation = object.__new__(NativeWindowsOperations)
+
+    assert callable(operation.capture_screen)
+
+
+def test_capture_screen_rejects_oversized_screen(monkeypatch):
+    operation = object.__new__(NativeWindowsOperations)
+
+    class FakeUser32:
+        def GetSystemMetrics(self, index):
+            return 4096 if index == 0 else 2160
+
+        def GetDC(self, value):
+            return 1
+
+        def ReleaseDC(self, hwnd, hdc):
+            return 1
+
+    class FakeGdi32:
+        def CreateCompatibleDC(self, hdc):
+            return 1
+
+        def CreateCompatibleBitmap(self, hdc, width, height):
+            return 1
+
+        def SelectObject(self, hdc, bitmap):
+            return 1
+
+        def BitBlt(
+            self,
+            destination_hdc,
+            x,
+            y,
+            width,
+            height,
+            source_hdc,
+            source_x,
+            source_y,
+            raster_operation,
+        ):
+            return 1
+
+        def DeleteObject(self, bitmap):
+            return 1
+
+        def DeleteDC(self, hdc):
+            return 1
+
+    monkeypatch.setattr(
+        ctypes,
+        "windll",
+        type(
+            "FakeWindll",
+            (),
+            {
+                "user32": FakeUser32(),
+                "gdi32": FakeGdi32(),
+            },
+        )(),
+        raising=False,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Screen capture exceeds the maximum supported size",
+    ):
+        operation.capture_screen()
 
 
 def test_allowed_application_set_is_explicit():

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import ctypes
 import os
 from pathlib import Path
 from typing import Any
@@ -96,6 +98,7 @@ class NativeWindowsOperations:
     )
 
     MAX_FILE_SIZE_BYTES = 1024 * 1024
+    MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024
 
     def __init__(self, filesystem_root: str) -> None:
         if os.name != "nt":
@@ -229,8 +232,132 @@ class NativeWindowsOperations:
     def _relative_filesystem_path(self, path: Path) -> str:
         return path.relative_to(self._filesystem_root).as_posix()
 
+    def capture_screen(self) -> dict[str, Any]:
+        import ctypes.wintypes as wintypes
+
+        user32 = ctypes.windll.user32
+        gdi32 = ctypes.windll.gdi32
+
+        width = user32.GetSystemMetrics(0)
+        height = user32.GetSystemMetrics(1)
+
+        if width <= 0 or height <= 0:
+            raise OSError("Invalid screen dimensions")
+
+        hdc_screen = user32.GetDC(None)
+        if not hdc_screen:
+            raise OSError("GetDC failed")
+
+        hdc_memory = None
+        bitmap = None
+        old_bitmap = None
+
+        try:
+            hdc_memory = gdi32.CreateCompatibleDC(hdc_screen)
+            if not hdc_memory:
+                raise OSError("CreateCompatibleDC failed")
+
+            bitmap = gdi32.CreateCompatibleBitmap(
+                hdc_screen,
+                width,
+                height,
+            )
+            if not bitmap:
+                raise OSError("CreateCompatibleBitmap failed")
+
+            old_bitmap = gdi32.SelectObject(hdc_memory, bitmap)
+            if not old_bitmap:
+                raise OSError("SelectObject failed")
+
+            SRCCOPY = 0x00CC0020
+            if not gdi32.BitBlt(
+                hdc_memory,
+                0,
+                0,
+                width,
+                height,
+                hdc_screen,
+                0,
+                0,
+                SRCCOPY,
+            ):
+                raise OSError("BitBlt failed")
+
+            class BITMAPINFOHEADER(ctypes.Structure):
+                _fields_ = [
+                    ("biSize", wintypes.DWORD),
+                    ("biWidth", wintypes.LONG),
+                    ("biHeight", wintypes.LONG),
+                    ("biPlanes", wintypes.WORD),
+                    ("biBitCount", wintypes.WORD),
+                    ("biCompression", wintypes.DWORD),
+                    ("biSizeImage", wintypes.DWORD),
+                    ("biXPelsPerMeter", wintypes.LONG),
+                    ("biYPelsPerMeter", wintypes.LONG),
+                    ("biClrUsed", wintypes.DWORD),
+                    ("biClrImportant", wintypes.DWORD),
+                ]
+
+            header = BITMAPINFOHEADER()
+            header.biSize = ctypes.sizeof(BITMAPINFOHEADER)
+            header.biWidth = width
+            header.biHeight = -height
+            header.biPlanes = 1
+            header.biBitCount = 32
+            header.biCompression = 0
+
+            buffer_size = width * 4 * height
+            if buffer_size > self.MAX_SCREENSHOT_BYTES:
+                raise ValueError(
+                    "Screen capture exceeds the maximum supported size"
+                )
+
+            pixels = ctypes.create_string_buffer(buffer_size)
+
+            gdi32.GetDIBits.argtypes = [
+                wintypes.HDC,
+                wintypes.HBITMAP,
+                wintypes.UINT,
+                wintypes.UINT,
+                ctypes.c_void_p,
+                ctypes.POINTER(BITMAPINFOHEADER),
+                wintypes.UINT,
+            ]
+            gdi32.GetDIBits.restype = wintypes.INT
+
+            copied = gdi32.GetDIBits(
+                hdc_memory,
+                bitmap,
+                0,
+                height,
+                pixels,
+                ctypes.byref(header),
+                0,
+            )
+            if copied != height:
+                raise OSError("GetDIBits failed")
+
+            encoded = base64.b64encode(pixels.raw).decode("ascii")
+
+            return {
+                "width": width,
+                "height": height,
+                "format": "BGRA",
+                "data": encoded,
+            }
+        finally:
+            if old_bitmap and hdc_memory:
+                gdi32.SelectObject(hdc_memory, old_bitmap)
+            if bitmap:
+                gdi32.DeleteObject(bitmap)
+            if hdc_memory:
+                gdi32.DeleteDC(hdc_memory)
+            user32.ReleaseDC(None, hdc_screen)
+
     def list_applications(self) -> list[dict[str, Any]]:
         import ctypes
+        import ctypes.wintypes as wintypes
+
         user32 = ctypes.windll.user32
 
         windows: list[dict[str, Any]] = []

@@ -36,6 +36,7 @@ from app.devices.tools import (
     make_windows_app_close_tool,
     make_windows_app_launch_tool,
     make_windows_app_list_tool,
+    make_windows_screen_capture_tool,
     make_windows_system_info_tool,
     make_windows_window_focus_tool,
     make_windows_keyboard_type_tool,
@@ -113,6 +114,7 @@ tool_router = ToolRouter(
 for windows_tool in (
     make_windows_system_info_tool(),
     make_windows_app_list_tool(),
+    make_windows_screen_capture_tool(),
     make_windows_app_launch_tool(),
     make_windows_app_close_tool(),
     make_windows_window_focus_tool(),

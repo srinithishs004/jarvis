@@ -20,6 +20,7 @@ def make_hello(
                 "capabilities": [
                     "system.info",
                     "app.list",
+                    "screen.capture",
                     "app.launch",
                     "app.close",
                     "window.focus",
@@ -36,6 +37,7 @@ def make_hello(
                 "tool_names": [
                     "windows.system.info",
                     "windows.app.list",
+                    "windows.screen.capture",
                     "windows.app.launch",
                     "windows.app.close",
                     "windows.window.focus",

@@ -46,6 +46,7 @@ def test_hello_contains_windows_registration():
         "capabilities": [
             "system.info",
             "app.list",
+            "screen.capture",
             "app.launch",
             "app.close",
             "window.focus",
@@ -62,6 +63,7 @@ def test_hello_contains_windows_registration():
         "tool_names": [
             "windows.system.info",
             "windows.app.list",
+            "windows.screen.capture",
             "windows.app.launch",
             "windows.app.close",
             "windows.window.focus",
@@ -159,6 +161,15 @@ class FakeWindowsOperations:
         self.calls.append(("list_applications",))
         return [{"window_id": "win-1", "title": "Notepad"}]
 
+    def capture_screen(self):
+        self.calls.append(("capture_screen",))
+        return {
+            "width": 1920,
+            "height": 1080,
+            "format": "BGRA",
+            "data": "encoded",
+        }
+
     def launch_application(self, application):
         self.calls.append(("launch_application", application))
         return {"application": application, "launched": True}
@@ -182,6 +193,21 @@ class FakeWindowsOperations:
     def write_file(self, path, text):
         self.calls.append(("write_file", path, text))
         return {"path": path, "written": True}
+
+
+def test_executor_allows_screen_capture():
+    operations = FakeWindowsOperations()
+    executor = CommandExecutor(operations=operations)
+
+    result = executor.execute("windows.screen.capture", {})
+
+    assert result == {
+        "width": 1920,
+        "height": 1080,
+        "format": "BGRA",
+        "data": "encoded",
+    }
+    assert operations.calls == [("capture_screen",)]
 
 
 def test_executor_allows_app_list():
@@ -293,6 +319,7 @@ def test_filesystem_write_delegates_to_operations():
     ("tool_name", "arguments"),
     [
         ("windows.app.list", {"unexpected": True}),
+        ("windows.screen.capture", {"unexpected": True}),
         ("windows.app.launch", {}),
         ("windows.app.launch", {"application": 123}),
         ("windows.app.launch", {"application": "notepad.exe", "extra": True}),
@@ -327,6 +354,7 @@ def test_hello_advertises_all_allowlisted_windows_tools():
     assert capabilities["capabilities"] == [
         "system.info",
         "app.list",
+        "screen.capture",
         "app.launch",
         "app.close",
         "window.focus",
@@ -344,6 +372,7 @@ def test_hello_advertises_all_allowlisted_windows_tools():
     assert capabilities["tool_names"] == [
         "windows.system.info",
         "windows.app.list",
+        "windows.screen.capture",
         "windows.app.launch",
         "windows.app.close",
         "windows.window.focus",
